@@ -31,7 +31,8 @@ const peekAtom = atom({ plugin: 'session-manager', key: 'peek' } as const, null,
 const nodeAtom = atom({ plugin: 'session-manager', key: 'node' } as const, '' as NodeState)
 const widgetAtom = atom({ plugin: 'session-manager', key: 'widget' } as const, true)
 const diagAtom = atom({ plugin: 'session-manager', key: 'diag' } as const, null, { shape: 'diag-1' })
-const ISSUES_URL = 'https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose'
+const OPEN_TOOL = 'mcp__session-manager__open_sessions'
+const ISSUES_URL ='https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose'
 const WIDGET_KEY = 'showWidget'
 const CARD_ROWS = 8
 const LABEL: Record<Pending['action'], [string, string]> = {
@@ -362,12 +363,35 @@ function summaryText(scan: ScanResult | null): string {
   return lines.join('\n')
 }
 
+// Opens the full pane and answers with the numbers, for /sessions and the open_sessions tool.
+async function openPane($: EngineInterface): Promise<string> {
+  const opened = await $.ui.open({ id: PANE, title: TITLE })
+  let scan = await read($, scanAtom)
+  if (!scan) {
+    // First run: wait for the numbers so the answer holds them.
+    await runScan($)
+    scan = await read($, scanAtom)
+  } else if (Date.now() - Date.parse(scan.scannedAt) > 10 * 60_000) void runScan($)
+  const head = opened.isPlaced
+    ? 'Sessions pane opened.'
+    : `The Sessions pane is not shown yet (${opened.reason ?? 'no surface to draw it'}); run /sessions again in a moment, or start a new session. Summary:`
+  return `${head}\n${summaryText(scan)}`
+}
+
 // ---------- register ----------
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
     await $.command.register({ name: 'sessions', description: 'Show every Claude session on this PC: tokens, uploads, cleanup' })
+    await $.tool
+      .register({
+        name: 'open_sessions',
+        description:
+          'Opens the Session Manager pane (every Claude Code session on this computer: tokens, disk use, uploads, cleanup, moving and restoring chats) and returns a short summary of the numbers. Changes nothing; all cleanup happens in the pane after the person confirms.',
+        inputSchema: { type: 'object', properties: {} },
+      })
+      .catch(() => undefined)
     // Bring back the last scan so the pane has numbers before a new scan finishes.
     if (!(await read($, scanAtom))) {
       const kept = (await $.store.get(STORE_KEY).catch(() => undefined)) as ScanResult | undefined
@@ -386,19 +410,17 @@ export const register: Register = on => {
     return started
   })
 
-  on('command.run', { command: 'sessions' }, async $ => {
-    const opened = await $.ui.open({ id: PANE, title: TITLE })
-    let scan = await read($, scanAtom)
-    if (!scan) {
-      // First run: wait for the numbers so the command's answer holds them.
-      await runScan($)
-      scan = await read($, scanAtom)
-    } else if (Date.now() - Date.parse(scan.scannedAt) > 10 * 60_000) void runScan($)
-    const head = opened.isPlaced
-      ? 'Sessions pane opened.'
-      : `The Sessions pane is not shown yet (${opened.reason ?? 'no surface to draw it'}); run /sessions again in a moment, or start a new session. Summary:`
-    return { text: `${head}\n${summaryText(scan)}` }
-  })
+  on('command.run', { command: 'sessions' }, async $ => ({ text: await openPane($) }))
+
+  // The tool the plugin's `sessions` skill calls (the skill is what lists Session Manager in
+  // the desktop app's Plugins menu): it opens the pane, as /sessions does. Nothing is
+  // deleted, cleared or moved from here; that happens in the pane, after the person confirms.
+  on('tool.call', { tool: OPEN_TOOL }, $ =>
+    openPane($)
+      .then(text => ({ result: text }))
+      // Node.js missing, or the scan failed: say so instead of failing the tool call.
+      .catch(err => ({ result: `Session Manager could not open: ${errText(err)}. Type /sessions to open the pane.` })),
+  )
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Select, Progress, Link } = $.ui.resolve(e)

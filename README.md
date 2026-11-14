@@ -74,6 +74,8 @@ Then start a new session and type `/sessions` to open the pane.
 ## Use
 
 - `/sessions` opens the pane. The first scan reads every transcript once (about 20 seconds on a large history). After that, only changed files are read again.
+- In the Claude desktop app you can also pick it from **+ → Plugins → Session Manager**, or just ask Claude to "show my sessions": the plugin's `sessions` skill opens the same pane. It never deletes anything itself; all cleanup stays in the pane and asks you first.
+- In the desktop app a small Sessions widget opens beside the chat when you start a new session (where your app version has widgets). Turn it off with **Widget at start** in the pane footer.
 - Click a tile's **Clean up** or **Bring here** to open its card.
 - **View** on any session shows what is inside it.
 - Moved chats show in the sidebar after you restart the Claude app.

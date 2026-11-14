@@ -1,7 +1,7 @@
 // Session Manager helper: scans Claude Code transcripts on this PC, sums their
 // token usage, strips uploaded images/documents, deletes old sessions, shows what is
 // inside one (peek) and moves app sidebar entries between accounts (move).
-// Prints one JSON object on stdout. Never reads credential files.
+// Prints one JSON object on stdout. Reads no login or account data.
 //
 //   node sessions.mjs scan   [--exclude <id>]
 //   node sessions.mjs strip  --ids a,b [--exclude <id>] [--permanent]
@@ -314,7 +314,7 @@ async function scan() {
       accounts.push({
         user: prof.user,
         accountUuid: a.accountUuid,
-        label: `account ${a.accountUuid.slice(0, 8)}`, // ~/.claude.json is never read, so no email
+        label: `account ${a.accountUuid.slice(0, 8)}`, // from the folder name only: no email
         isAppActive: newest > 0 && a.lastWriteMs === newest, // the account the desktop app uses now
         orgs: a.orgs.size,
         indexed: a.indexed,

@@ -44,7 +44,7 @@ The helper also runs on its own, for example `node scripts/sessions.mjs scan`. I
 
 - Never let the helper touch skills, plugins, memory, settings or anything outside the session folders. Keep the checks in `sessionShape` and `PROTECTED`.
 - Everything that deletes or rewrites files asks first in the pane and sends the old files to the Recycle Bin (Windows) or the Trash (macOS, Linux).
-- Never read credentials or the account file (`~/.claude.json`). Accounts are labelled from the app's folder names only.
+- Never read login, account or password data. Accounts are labelled from the app's folder names only.
 - Tests and screenshots use made-up data only.
 
 ## Releases

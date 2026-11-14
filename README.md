@@ -39,7 +39,7 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
 - Conversations still in the app's list are not deleted here. Delete them in the app first; their leftover files can then be cleared here.
 - Deleted and replaced files go to the **Recycle Bin** (Windows) or the **Trash** (macOS, Linux), so you can restore them.
 - Every delete, clear and move asks you first.
-- No account or credential file is read: not `~/.claude.json`, not `~/.claude/.credentials.json`, not the system keychain. Accounts are shown by the start of their id ("account 1a2b3c4d"), taken from the app's folder names. Nothing is sent anywhere.
+- No login, account or password data is read. Accounts are shown by the start of their id ("account 1a2b3c4d"), taken from the app's folder names. Nothing is sent anywhere.
 
 ## What it reads, runs and sends
 
@@ -51,7 +51,7 @@ When Claude opens the pane for you (the `sessions` skill and its `open_sessions`
 
 - Session transcripts and their side folders under `~/.claude` (`projects`, `file-history`, `session-env`). Conversation text is read to count tokens and uploads, to find titles, and for **View**, and is shown only on your screen.
 - The Claude desktop app's sidebar index (`claude-code-sessions` in the app's data folder), to show which chats are in the app and to move or restore them.
-- Nothing else: no account file (`~/.claude.json`), credentials file (`~/.claude/.credentials.json`) or keychain, and no files outside the folders above.
+- Nothing else: no login or account data, and no files outside the folders above.
 
 **Hooks it adds:** `session.start` (registers `/sessions` and the `open_sessions` tool, and opens the widget on the desktop app), `command.run` for `/sessions`, `ui.render` for the pane, and `tool.call` for its own tool `mcp__session-manager__open_sessions` only. That `tool.call` hook answers calls to this one tool (it opens the pane and returns the summary above); it never sees, changes or blocks calls to any other tool.
 

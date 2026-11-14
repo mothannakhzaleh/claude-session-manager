@@ -1,0 +1,6 @@
+.claude-plugin/types/
+*.log
+*.sm-orig
+*.sm-tmp
+.DS_Store
+Thumbs.db

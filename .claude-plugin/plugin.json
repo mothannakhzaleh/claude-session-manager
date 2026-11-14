@@ -1,0 +1,9 @@
+{
+  "name": "session-manager",
+  "version": "0.2.0",
+  "description": "See every Claude Code session on your PC by account, with token totals; clear uploads, delete old sessions and leftover logs, view what is inside a chat, and move chats between accounts",
+  "author": { "name": "mothannakh", "url": "https://satisfy.live/" },
+  "license": "MIT",
+  "homepage": "https://github.com/mothannakhzaleh/claude-session-manager",
+  "types": "./types/index.d.ts"
+}

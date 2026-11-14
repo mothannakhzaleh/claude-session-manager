@@ -361,8 +361,7 @@ function summaryText(scan: ScanResult | null): string {
   for (const a of scan.accounts) {
     const rows = scan.sessions.filter(s => s.account === a.accountUuid)
     if (!rows.length) continue // an account with no sessions left adds nothing
-    const tags = `${a.isAppActive ? ' · this app' : ''}${a.isSignedIn ? ' · terminal login' : ''}`
-    lines.push(`- account ${++n}${tags}: ${rows.length} session(s), out ${num(sum(rows).output)} tokens`)
+    lines.push(`- account ${++n}${a.isAppActive ? ' · this app' : ''}: ${rows.length} session(s), out ${num(sum(rows).output)} tokens`)
   }
   const none = chats.filter(s => !s.account)
   lines.push(`- conversations in no app list: ${none.length}, out ${num(sum(none).output)} tokens`)
@@ -537,7 +536,7 @@ export const register: Register = on => {
       { value: 'all', label: `All accounts (${scan.sessions.length})` },
       ...scan.accounts.map(a => ({
         value: a.accountUuid,
-        label: `${a.label}${a.isAppActive ? ' · this app' : ''}${a.isSignedIn ? ' · terminal login' : ''}${scan.users.length > 1 ? ` · ${a.user}` : ''} (${countFor(a.accountUuid)})`,
+        label: `${a.label}${a.isAppActive ? ' · this app' : ''}${scan.users.length > 1 ? ` · ${a.user}` : ''} (${countFor(a.accountUuid)})`,
       })),
       { value: 'none', label: `In no app list (${countFor(undefined)})` },
     ]

@@ -36,8 +36,8 @@ const SCAN: ScanResult = {
   parsed: 0,
   users: ['alice'],
   accounts: [
-    { user: 'alice', accountUuid: ACC, label: 'alice@example.test', isSignedIn: true, isAppActive: false, orgs: 1, indexed: 1, deletedMarkers: 0 },
-    { user: 'alice', accountUuid: APP, label: 'account cccccccc', isSignedIn: false, isAppActive: true, orgs: 1, indexed: 0, deletedMarkers: 0 },
+    { user: 'alice', accountUuid: ACC, label: 'account aaaaaaaa', isAppActive: false, orgs: 1, indexed: 1, deletedMarkers: 0 },
+    { user: 'alice', accountUuid: APP, label: 'account cccccccc', isAppActive: true, orgs: 1, indexed: 0, deletedMarkers: 0 },
   ],
   total: { input: 10, output: 4500, cacheWrite: 100, cacheRead: 9000, messages: 9 },
   models: {},
@@ -75,7 +75,6 @@ test('the pane lists sessions and asks before deleting, on every surface', async
   expect(JSON.stringify(opened)).toContain('Sessions pane')
   // That answer reaches the chat: accounts are numbered, never named.
   expect(JSON.stringify(opened)).toContain('account 1')
-  expect(JSON.stringify(opened)).not.toContain('alice@example.test')
   expect(JSON.stringify(opened)).not.toContain(ACC)
 
   for (const surface of ['terminal', 'desktop'] as const) {

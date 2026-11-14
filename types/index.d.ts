@@ -29,7 +29,6 @@ export type AccountRow = {
   user: string
   accountUuid: string
   label: string
-  isSignedIn: boolean // the terminal (CLI) login
   isAppActive?: boolean // the account the desktop app is using now
   orgs: number
   indexed: number

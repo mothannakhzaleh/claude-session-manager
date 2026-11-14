@@ -388,7 +388,8 @@ async function openPane($: EngineInterface): Promise<string> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
-    await $.command.register({ name: 'sessions', description: 'Show every Claude session on this PC: tokens, uploads, cleanup' })
+    // Each registration stands alone: one the engine refuses (a /sessions taken by a skill of
+    // the same name, say) must not stop the tool, the widget or the rest of this hook.
     await $.tool
       .register({
         name: 'open_sessions',
@@ -396,6 +397,9 @@ export const register: Register = on => {
           'Opens the Session Manager pane (every Claude Code session on this computer: tokens, disk use, uploads, cleanup, moving and restoring chats) and returns a short summary of the numbers. Changes nothing; all cleanup happens in the pane after the person confirms.',
         inputSchema: { type: 'object', properties: {} },
       })
+      .catch(() => undefined)
+    await $.command
+      .register({ name: 'sessions', description: 'Show every Claude session on this PC: tokens, uploads, cleanup' })
       .catch(() => undefined)
     // Bring back the last scan so the pane has numbers before a new scan finishes.
     if (!(await read($, scanAtom))) {

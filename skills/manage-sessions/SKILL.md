@@ -1,5 +1,5 @@
 ---
-name: sessions
+name: manage-sessions
 description: Open Session Manager, the pane that lists every Claude Code session on this computer with token totals, disk use and uploads, and cleans up, moves or restores chats. Use when the person asks to see, count, clean up, move or restore their Claude sessions or chats.
 ---
 

@@ -95,18 +95,21 @@ async function nodeFromShell($: EngineInterface): Promise<string[]> {
   return found
 }
 
+async function nodeAt($: EngineInterface, candidate: string): Promise<boolean> {
+  try {
+    const r = await $.process.run([candidate, '--version'], { timeoutMs: 15_000 })
+    const major = Number(/^v(\d+)\./.exec(r.stdout.trim())?.[1] ?? 0)
+    return r.exitCode === 0 && major >= NODE_MIN_MAJOR
+  } catch {
+    return false // not installed at this place
+  }
+}
+
+// The fixed places first; the shells are asked only when none of them has Node.js.
 async function findNode($: EngineInterface): Promise<string> {
   if (nodeCmd) return nodeCmd
-  for (const candidate of [...NODE_CANDIDATES, ...(await nodeFromShell($))]) {
-    try {
-      const r = await $.process.run([candidate, '--version'], { timeoutMs: 15_000 })
-      const major = Number(/^v(\d+)\./.exec(r.stdout.trim())?.[1] ?? 0)
-      if (r.exitCode === 0 && major >= NODE_MIN_MAJOR) {
-        nodeCmd = candidate
-        return candidate
-      }
-    } catch {} // not installed at this place
-  }
+  for (const candidate of NODE_CANDIDATES) if (await nodeAt($, candidate)) return (nodeCmd = candidate)
+  for (const candidate of await nodeFromShell($)) if (await nodeAt($, candidate)) return (nodeCmd = candidate)
   return ''
 }
 
@@ -352,11 +355,14 @@ function summaryText(scan: ScanResult | null): string {
     `${chats.length} conversations and ${logs.length} leftover logs (${mb(bytesOf(logs, s => s.bytes.total))}); ${mb(bytesOf(scan.sessions, s => s.bytes.total))} on disk, ${mb(bytesOf(scan.sessions, s => s.uploads.bytes))} of it uploads.`,
     `Tokens (all sessions): ${tok(scan.total)} over ${scan.total.messages} model replies.`,
   ]
+  // This text reaches the conversation (the open_sessions tool), so accounts are numbered:
+  // no email, account id, organization or chat title leaves the pane.
+  let n = 0
   for (const a of scan.accounts) {
     const rows = scan.sessions.filter(s => s.account === a.accountUuid)
     if (!rows.length) continue // an account with no sessions left adds nothing
     const tags = `${a.isAppActive ? ' · this app' : ''}${a.isSignedIn ? ' · terminal login' : ''}`
-    lines.push(`- ${a.label}${tags}: ${rows.length} session(s), out ${num(sum(rows).output)} tokens`)
+    lines.push(`- account ${++n}${tags}: ${rows.length} session(s), out ${num(sum(rows).output)} tokens`)
   }
   const none = chats.filter(s => !s.account)
   lines.push(`- conversations in no app list: ${none.length}, out ${num(sum(none).output)} tokens`)

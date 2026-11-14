@@ -65,7 +65,14 @@ test('the pane lists sessions and asks before deleting, on every surface', async
   const PEEK = { ok: true, firstPrompts: ['Add a login page'], lastReplies: ['Done.'], tools: [['Edit', 2]], files: ['E:/demo/login.tsx'], promptCount: 1, uploads: 0 }
   on('process.run', (_, e) => ({ value: { exitCode: 0, stderr: '', isStdoutTruncated: false, isStderrTruncated: false, stdout: e.argv[1] === '--version' ? 'v22.11.0\n' : JSON.stringify(e.argv.includes('diag') ? DIAG : PEEK) } }))
 
+  // ui.open answers as a surface that shows the pane (the tool behind the skill opens it).
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+
+  // The tool behind the plugin's skill opens the pane and answers with the numbers.
+  const opened = await $.tool.call({ tool: 'mcp__session-manager__open_sessions' })
+  expect(JSON.stringify(opened)).toContain('Sessions pane')
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })

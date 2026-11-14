@@ -6,6 +6,7 @@
 //   node sessions.mjs scan   [--exclude <id>]
 //   node sessions.mjs strip  --ids a,b [--exclude <id>] [--permanent]
 //   node sessions.mjs delete --ids a,b [--exclude <id>] [--permanent]
+//   node sessions.mjs diag   (a report for bug reports: no emails, ids or user names)
 //   --users-root <dir>   folder holding user profiles (default: the folder above your home, such as
 //                        C:\Users, /Users or /home; tests use a fixture)
 //   --cache <file>       scan cache (default <home>/.claude/cache/session-manager-scan.json)
@@ -16,6 +17,7 @@ import path from 'node:path'
 import os from 'node:os'
 import readline from 'node:readline'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const LIVE_MS = 15 * 60 * 1000 // a transcript written in the last 15 minutes counts as live
@@ -1023,6 +1025,114 @@ async function peek(id) {
   })
 }
 
+// ---------- diag: a report to paste into an issue ----------
+
+// What this system looks like to the helper, for a bug report: versions, where the bin is,
+// how many transcripts there are and which desktop app folders exist, with counts.
+// Never emails, account or organization ids, user names or chat titles: the home folder is
+// written as ~ and only the signed-in user's own folders are described.
+async function diag() {
+  const home = selfProfile ?? (await profiles())[0]?.home ?? os.homedir()
+  // The app's install folder name (Claude-Data/claude_<code>) is written as <install>.
+  const tilde = p =>
+    (fold(p).startsWith(fold(home)) ? `~${p.slice(home.length)}` : p).replaceAll('\\', '/').replace(/(Claude-Data\/)[^/]+/, '$1<install>')
+  const ago = ms => (ms ? `${Math.max(0, Math.round((Date.now() - ms) / 86_400_000))} days ago` : 'never')
+  const lines = []
+  const add = (...l) => lines.push(...l)
+
+  let version = 'unknown'
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    version = JSON.parse(await fsp.readFile(path.join(here, '..', '.claude-plugin', 'plugin.json'), 'utf8')).version ?? version
+  } catch {}
+
+  add('### Session Manager diagnostics', '')
+  add(`- Session Manager: ${version}`)
+  add(`- System: ${PLATFORM} ${os.release()} (${os.arch()})`)
+  add(`- Node.js: ${process.version}`)
+  if (PLATFORM === 'darwin') add(`- Bin: Trash (the \`trash\` command: ${fs.existsSync('/usr/bin/trash') ? 'yes' : 'no, plain move into ~/.Trash'})`)
+  else if (PLATFORM === 'linux') add(`- Bin: Trash in ${tilde(path.join(process.env.XDG_DATA_HOME || path.join(home, '.local', 'share'), 'Trash'))}`)
+  else add('- Bin: Recycle Bin')
+  const profs = await profiles()
+  add(`- User folders with Claude Code sessions: ${profs.length}`)
+
+  // This user's transcripts.
+  const claude = path.join(home, '.claude')
+  let transcripts = 0
+  let projects = 0
+  for (const project of await dirs(path.join(claude, 'projects'))) {
+    const n = (await files(path.join(claude, 'projects', project))).filter(f => f.endsWith('.jsonl') && UUID.test(f.slice(0, -6))).length
+    if (n) projects++
+    transcripts += n
+  }
+  add(`- This user: ${transcripts} transcript(s) in ${projects} project folder(s); terminal login: ${(await signedInAccount(home)) ? 'yes' : 'no'}`)
+
+  // The desktop app folders the helper checks on this system, and what each holds.
+  add('', '**Desktop app folders checked**', '')
+  const roots = await appRoots(home)
+  const expected =
+    PLATFORM === 'win32'
+      ? [path.join(home, 'AppData', 'Local', 'Claude-Data'), path.join(home, 'AppData', 'Roaming', 'Claude')]
+      : PLATFORM === 'darwin'
+        ? [path.join(home, 'Library', 'Application Support', 'Claude'), path.join(home, 'Library', 'Application Support', 'Claude-Data')]
+        : [path.join(home, '.config', 'Claude')]
+  for (const p of expected) add(`- ${tilde(p)}: ${(await exists(p)) ? 'exists' : 'missing'}`)
+  if (roots.length === 0) add('- No folder with sidebar entries found: move and restore are not available.')
+  for (const root of roots) {
+    const sessionsDir = path.join(root, 'claude-code-sessions')
+    let accounts = 0
+    let orgs = 0
+    let entries = 0
+    let archived = 0
+    let deleted = 0
+    let newest = 0
+    for (const account of await dirs(sessionsDir)) {
+      if (!UUID.test(account)) continue
+      accounts++
+      for (const org of await dirs(path.join(sessionsDir, account))) {
+        if (!UUID.test(org)) continue
+        orgs++
+        const folder = path.join(sessionsDir, account, org)
+        for (const name of await files(folder)) {
+          if (LOCAL_NAME.test(name)) entries++
+          else if (name.startsWith('deleted_')) deleted++
+          else if (name === ARCHIVE_IDX) {
+            try {
+              archived += JSON.parse(await fsp.readFile(path.join(folder, name), 'utf8'))?.archived?.length ?? 0
+            } catch {}
+          }
+          const st = await fsp.stat(path.join(folder, name)).catch(() => undefined)
+          if (st && st.mtimeMs > newest) newest = st.mtimeMs
+        }
+      }
+    }
+    add(`- ${tilde(sessionsDir)}: ${accounts} account(s), ${orgs} organization folder(s), ${entries} sidebar entries (${archived} archived), ${deleted} deleted mark(s), last written ${ago(newest)}`)
+  }
+
+  // Other folders named claude-code-sessions near where apps keep data: a layout this
+  // version does not know yet shows up here.
+  const bases =
+    PLATFORM === 'win32'
+      ? [path.join(home, 'AppData', 'Local'), path.join(home, 'AppData', 'Roaming')]
+      : PLATFORM === 'darwin'
+        ? [path.join(home, 'Library', 'Application Support')]
+        : [process.env.XDG_CONFIG_HOME || path.join(home, '.config')]
+  const known = new Set(roots.map(r => fold(path.join(r, 'claude-code-sessions'))))
+  const others = []
+  for (const base of bases) {
+    for (const a of await dirs(base)) {
+      if (!/claude/i.test(a)) continue
+      const level1 = path.join(base, a)
+      const candidates = [path.join(level1, 'claude-code-sessions'), ...(await dirs(level1)).map(b => path.join(level1, b, 'claude-code-sessions'))]
+      for (const c of candidates) if (!known.has(fold(c)) && (await exists(c))) others.push(c)
+    }
+  }
+  add('', '**Other folders named claude-code-sessions**', '')
+  add(...(others.length ? others.map(o => `- ${tilde(o)}`) : ['- none']))
+
+  out({ ok: true, report: lines.join('\n') })
+}
+
 // `--ids -` reads the comma- or line-separated ids from standard input (a long list overflows a command line).
 async function readIds() {
   const v = opt('ids') ?? ''
@@ -1040,7 +1150,8 @@ try {
   else if (cmd === 'move') await move(ids)
   else if (cmd === 'peek') await peek(ids[0] ?? '')
   else if (cmd === 'restore') await restore(ids)
-  else fail('usage: sessions.mjs scan|strip|delete|move|restore|peek [--ids a,b] [--to account] [--exclude id] [--permanent]')
+  else if (cmd === 'diag') await diag()
+  else fail('usage: sessions.mjs scan|strip|delete|move|restore|peek|diag [--ids a,b] [--to account] [--exclude id] [--permanent]')
 } catch (err) {
   fail(String(err?.stack ?? err))
 }

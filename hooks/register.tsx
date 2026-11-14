@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Card, NodeState, Peek, Pending, ScanResult, SessionRow, Tokens, View, Work } from '../types'
+import type { Card, Diag, NodeState, Peek, Pending, ScanResult, SessionRow, Tokens, View, Work } from '../types'
 
 // Session Manager: every Claude Code session on this PC, grouped by Claude account,
 // with token totals; clears uploaded images/files and deletes old sessions and leftover logs.
@@ -12,6 +12,7 @@ const PANE = 'session-manager'
 const TITLE = 'Sessions'
 const STORE_KEY = 'lastScan'
 const DAY = 86_400_000
+const NL = String.fromCharCode(10)
 
 // Shape tags decline what an earlier version stored (scan-1 rows had no `kind`).
 const scanAtom = atom({ plugin: 'session-manager', key: 'scan' } as const, null, { shape: 'scan-2' })
@@ -29,6 +30,8 @@ const cardPageAtom = atom({ plugin: 'session-manager', key: 'cardPage' } as cons
 const peekAtom = atom({ plugin: 'session-manager', key: 'peek' } as const, null, { shape: 'peek-1' })
 const nodeAtom = atom({ plugin: 'session-manager', key: 'node' } as const, '' as NodeState)
 const widgetAtom = atom({ plugin: 'session-manager', key: 'widget' } as const, true)
+const diagAtom = atom({ plugin: 'session-manager', key: 'diag' } as const, null, { shape: 'diag-1' })
+const ISSUES_URL = 'https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose'
 const WIDGET_KEY = 'showWidget'
 const CARD_ROWS = 8
 const LABEL: Record<Pending['action'], [string, string]> = {
@@ -198,6 +201,18 @@ async function runScan($: EngineInterface) {
 }
 
 // Opens the View card for one session and fills it from the helper's `peek`.
+// Builds the diagnostics report for a bug report and shows it in its box.
+async function runDiag($: EngineInterface) {
+  const loading: Diag = { isLoading: true }
+  await update($, diagAtom, () => loading)
+  try {
+    const body = await helper($, ['diag'])
+    await update($, diagAtom, () => ({ isLoading: false, report: String(body.report ?? '') }))
+  } catch (err) {
+    await update($, diagAtom, () => ({ isLoading: false, error: errText(err) }))
+  }
+}
+
 async function runPeek($: EngineInterface, s: SessionRow) {
   const peek: Peek = { id: s.id, title: s.title, isLoading: true }
   await update($, peekAtom, () => peek)
@@ -386,7 +401,7 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Select, Progress } = $.ui.resolve(e)
+    const { Box, Text, Button, Select, Progress, Link } = $.ui.resolve(e)
     const scan = await read($, scanAtom)
     // Windows names it the Recycle Bin; macOS and Linux, the Trash. Known after the first scan.
     const bin = scan?.trash ?? 'Recycle Bin'
@@ -503,6 +518,7 @@ export const register: Register = on => {
     const cardPage = await read($, cardPageAtom)
     const work = await read($, workAtom)
     const peek = await read($, peekAtom)
+    const diag = await read($, diagAtom)
     const widget = await read($, widgetAtom)
     const isWorking = work !== null || busy !== ''
     const openCard = (c: Card) => {
@@ -655,6 +671,45 @@ export const register: Register = on => {
       </Box>
     ) : null
 
+    // ----- Diagnostics: a report to paste into a bug report -----
+    const diagView = diag ? (
+      <Box key="diag" flexDirection="column" borderStyle="round" borderColor="suggestion" paddingX={1} rowGap={1}>
+        <Box flexDirection="row" justifyContent="space-between" alignItems="center">
+          <Text bold>Diagnostics</Text>
+          <Button key="diag-close" role="dismiss" plain dimColor onPress={() => void update($, diagAtom, () => null)}>
+            Close
+          </Button>
+        </Box>
+        {diag.isLoading ? <Progress label="Looking at this computer" /> : null}
+        {diag.error ? <Text color="error">{diag.error}</Text> : null}
+        {diag.report ? (
+          <Box flexDirection="column" rowGap={1}>
+            <Text dimColor>No emails, account ids, user names or chat titles are in it. Paste it into a bug report so we can see how Claude keeps its files on your system.</Text>
+            <Box flexDirection="column">
+              {diag.report.split(NL).map((l, i) => (
+                <Text key={`dl-${i}`} wrap="truncate-end">
+                  {l || ' '}
+                </Text>
+              ))}
+            </Box>
+            <Box flexDirection="row" columnGap={2} alignItems="center">
+              <Button
+                key="diag-copy"
+                variant="primary"
+                onPress={async press => {
+                  const r = await $.ui.copy({ text: diag.report ?? '', surface: press.surface })
+                  await update($, diagAtom, now => (now ? { ...now, isCopied: r.isCopied } : now))
+                }}
+              >
+                {diag.isCopied ? 'Copied' : 'Copy report'}
+              </Button>
+              <Link href={ISSUES_URL}>Report a bug on GitHub</Link>
+            </Box>
+          </Box>
+        ) : null}
+      </Box>
+    ) : null
+
     // ----- View: what is inside one session -----
     const line = (label: string, value: string | undefined) =>
       value ? (
@@ -752,6 +807,7 @@ export const register: Register = on => {
         {progressView}
         {cardView}
         {peekView}
+        {diagView}
         {/* ----- confirmation ----- */}
         {pending && (
           <Box flexDirection="column" borderStyle="round" borderColor="warning" paddingX={1} rowGap={1}>
@@ -927,6 +983,9 @@ export const register: Register = on => {
           <Text dimColor size="caption">
             Session Manager © 2026 mothannakh · https://satisfy.live/
           </Text>
+          <Button key="diag-open" plain dimColor onPress={() => void runDiag($)}>
+            Diagnostics
+          </Button>
           <Button
             key="widget-toggle"
             plain

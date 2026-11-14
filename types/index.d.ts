@@ -91,6 +91,9 @@ export type Pending = {
   isQueued?: boolean // confirmed while a scan ran; starts when the scan ends
 }
 
+// The Diagnostics box: the helper's report (no emails, ids or user names), ready to copy.
+export type Diag = { isLoading: boolean; report?: string; error?: string; isCopied?: boolean }
+
 // Whether the helper's Node.js was found: '' found (or not checked yet), 'missing', 'installing'.
 export type NodeState = '' | 'missing' | 'installing'
 
@@ -108,6 +111,7 @@ declare module 'claude-code' {
       peek: Shaped<Peek | null>
       node: NodeState
       widget: boolean // open the small Sessions widget when a desktop session starts
+      diag: Shaped<Diag | null>
     }
   }
 }

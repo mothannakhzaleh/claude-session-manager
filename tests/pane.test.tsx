@@ -60,8 +60,10 @@ test('the pane lists sessions and asks before deleting, on every surface', async
   on('command.register', () => ({ value: { command: 'sessions' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('store.get', () => ({ value: SCAN }))
-  // The helper's peek answer, as $.process.run would return it.
-  on('process.run', (_, e) => ({ value: { exitCode: 0, stderr: '', isStdoutTruncated: false, isStderrTruncated: false, stdout: e.argv[1] === '--version' ? 'v22.11.0\n' : JSON.stringify({ ok: true, firstPrompts: ['Add a login page'], lastReplies: ['Done.'], tools: [['Edit', 2]], files: ['E:/demo/login.tsx'], promptCount: 1, uploads: 0 }) } }))
+  // The helper's answers (diag report, else peek), as $.process.run would return them.
+  const DIAG = { ok: true, report: '### Session Manager diagnostics\n\n- System: testos 1.0 (x64)' }
+  const PEEK = { ok: true, firstPrompts: ['Add a login page'], lastReplies: ['Done.'], tools: [['Edit', 2]], files: ['E:/demo/login.tsx'], promptCount: 1, uploads: 0 }
+  on('process.run', (_, e) => ({ value: { exitCode: 0, stderr: '', isStdoutTruncated: false, isStderrTruncated: false, stdout: e.argv[1] === '--version' ? 'v22.11.0\n' : JSON.stringify(e.argv.includes('diag') ? DIAG : PEEK) } }))
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
 
@@ -130,6 +132,14 @@ test('the pane lists sessions and asks before deleting, on every surface', async
     await ui.select({ key: 'account', value: ACC })
     expect((await ui.find({ type: 'Text', text: /^Conversations · / }))?.text).toBe('Conversations · 1')
     await ui.select({ key: 'account', value: 'all' })
+    // Diagnostics shows a report to copy into a bug report.
+    expect(await ui.find({ key: 'diag-copy' })).toBeUndefined()
+    await ui.press({ key: 'diag-open' })
+    expect(await ui.find({ type: 'Text', text: /^- System: testos 1\.0/ })).toBeDefined()
+    expect((await ui.find({ key: 'diag-copy' }))?.text).toBe('Copy report')
+    await ui.press({ key: 'diag-close' })
+    expect(await ui.find({ key: 'diag-copy' })).toBeUndefined()
+
     expect((await ui.find({ key: 'widget-toggle' }))?.text).toBe('Widget at start: on')
     await ui.press({ key: 'widget-toggle' })
     expect((await ui.find({ key: 'widget-toggle' }))?.text).toBe('Widget at start: off')

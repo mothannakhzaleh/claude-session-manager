@@ -161,6 +161,17 @@ test('delete sends a session to the bin and refuses a live one', () => {
   }
 })
 
+test('diagnostics describe the folders without ids or names', () => {
+  const r = run('diag')
+  assert.equal(r.ok, true, r.error)
+  assert.match(r.report, /^### Session Manager diagnostics/)
+  assert.match(r.report, new RegExp(`System: ${process.platform} `))
+  assert.match(r.report, /claude-code-sessions: 2 account\(s\), 2 organization folder\(s\)/)
+  for (const secret of [ACCOUNT_OLD, ACCOUNT_NEW, ORG, S_APP, 'tester', 'App chat', usersRoot]) {
+    assert.ok(!r.report.includes(secret), `the report must not hold ${secret}`)
+  }
+})
+
 test('a bad id is refused', () => {
   const r = run('delete', '--ids', '../skills/keep-me')
   assert.equal(r.results[0].ok, false)

@@ -71,6 +71,12 @@ body:
       label: Node.js version
       description: "From `node --version`, or \"not installed\""
   - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: In the Sessions pane press **Diagnostics** (footer), then **Copy report**, and paste it here. It holds no emails, account ids or user names.
+      render: markdown
+  - type: textarea
     id: details
     attributes:
       label: Message or screenshot

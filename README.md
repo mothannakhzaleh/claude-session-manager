@@ -8,6 +8,8 @@
 
 See every Claude Code session on your computer (Windows, macOS or Linux), for every Claude account, in one pane: what each one cost in tokens, how much disk it uses and what is inside it. Then clean up safely: clear uploaded images and files, delete old sessions and leftover logs, and move chats from another account into the one you use now.
 
+**Works on Windows, macOS and Linux.** Every change is tested on all three before it is released ([what works where](#requirements)).
+
 ![Overview: tiles for conversations, leftover logs, uploads, old sessions, other accounts and tokens, then the session list](docs/images/overview.png)
 
 ## What it does
@@ -22,6 +24,7 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
 - **Bring chats from another account.** Moves a chat's sidebar entry into the account the Claude app uses now, so you can continue it there. It lands in your Active list. The conversation itself stays where it is, so nothing is duplicated or left behind.
 - **Restore deleted chats to the sidebar.** A chat you deleted in the app often still has its conversation on disk ("Deleted in app, files left"). **Restore to sidebar** gives it a new entry in your Active list so you can continue it. The conversation is not changed.
 - **Small widget.** In the Claude desktop app a small Sessions widget opens beside the chat with the main numbers. Turn it off from the pane footer.
+- **Diagnostics.** The **Diagnostics** button in the pane footer shows a short report (versions, where removed files go, which Claude folders exist and how many sessions each holds) with a **Copy report** button for bug reports. It holds no emails, account ids, user names or chat titles.
 
 ![Cleanup: the Uploads card with its own Clear all button, and the progress bar while it runs](docs/images/cleanup.png)
 
@@ -45,7 +48,7 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
   | System | Tested in CI | Notes |
   | --- | --- | --- |
   | Windows 10 or 11 | yes | Removed files go to the Recycle Bin. |
-  | macOS | yes | Removed files go to the Trash (with Finder's **Put Back** where macOS has the `trash` command). Moving and restoring app sidebar entries expects the app's data in `~/Library/Application Support/Claude` and is not yet confirmed on a real Mac: please [report](https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose) how it goes. |
+  | macOS | yes | Removed files go to the Trash (with Finder's **Put Back** where macOS has the `trash` command). Moving and restoring app sidebar entries expects the app's data in `~/Library/Application Support/Claude` and is not yet confirmed on a real Mac: please [report](https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose) how it goes, with the **Diagnostics** report. |
   | Linux | yes | Removed files go to the desktop Trash (`~/.local/share/Trash`). Claude has no official Linux desktop app, so moving and restoring sidebar entries applies only to a build that keeps its data in `~/.config/Claude`. |
 
   "Tested in CI" means the helper's scan, view, clear, delete, move and restore run on that system against made-up sessions.

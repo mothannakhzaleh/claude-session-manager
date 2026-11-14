@@ -40,6 +40,7 @@ const LABEL: Record<Pending['action'], [string, string]> = {
   strip: ['Clearing uploads in', 'session(s)'],
   move: ['Moving', 'chat(s) to this account'],
   restore: ['Restoring', 'chat(s) to the sidebar'],
+  forget: ['Removing', 'empty account folder(s)'],
 }
 
 // ---------- formatting ----------
@@ -299,6 +300,8 @@ async function runAction($: EngineInterface, p: Pending) {
           ? `Cleared uploads in ${done.length} session(s), ${mb(bytes)} smaller${where}`
           : p.action === 'restore'
             ? `Restored ${done.length} chat(s) to the sidebar. Restart the Claude app to see them.`
+            : p.action === 'forget'
+            ? `Removed ${done.length} empty account folder(s)${where}`
             : `Moved ${done.length} chat(s) to this account. Restart the Claude app to see them in the sidebar.`
     if (gone) note += ` · ${gone} were already gone`
     if (refused.length) note += ` · skipped ${refused.length}: ${cut(refused[0]?.reason ?? '', 80)}`
@@ -520,6 +523,11 @@ export const register: Register = on => {
 
     // ----- numbers for the selected account -----
     const scope = inAccount(scan, view)
+    // Accounts with an app folder but nothing left in it: not the app's own, no sidebar entry, no session.
+    const emptyAccounts = scan.accounts.filter(
+      (a, i, all) =>
+        !a.isAppActive && a.indexed === 0 && all.findIndex(b => b.accountUuid === a.accountUuid) === i && !scan.sessions.some(s => s.account === a.accountUuid),
+    )
     const chats = scope.filter(s => s.kind === 'chat')
     const logs = scope.filter(s => s.kind === 'log')
     const cutoff = Date.now() - view.olderDays * DAY
@@ -846,6 +854,8 @@ export const register: Register = on => {
             {/* Exactly what the action touches, so the person confirms names, not a count. */}
             <Box flexDirection="column">
               {pending.ids.slice(0, 5).map(id => {
+                const acc = pending.action === 'forget' ? scan.accounts.find(a => a.accountUuid === id) : undefined
+                if (acc) return <Text key={`pend-${id}`}>{`• ${acc.label} · no chats left`}</Text>
                 const s = scan.sessions.find(x => x.id === id)
                 return (
                   <Text key={`pend-${id}`} wrap="truncate-end">
@@ -856,7 +866,9 @@ export const register: Register = on => {
               {pending.ids.length > 5 ? <Text dimColor>{`…and ${pending.ids.length - 5} more`}</Text> : null}
             </Box>
             <Text>
-              {pending.action === 'restore'
+              {pending.action === 'forget'
+                ? `Removes each account’s folder from the Claude app’s data and sends it to the ${bin}. No chat is in it, so your sidebar and conversations do not change. The account the app uses now, and any account with chats left, are never touched. Signing in to that account again makes a new folder.`
+                : pending.action === 'restore'
                 ? `Gives each chat a new entry in this app’s sidebar (Active list) so you can continue it, and moves the app’s “deleted” mark to the ${bin}. The conversation is not changed. Restart the Claude app afterwards.`
                 : pending.action === 'move'
                 ? 'Each chat leaves its old account’s sidebar and joins this one. Restart the Claude app afterwards. Chats open now or used in the last 15 minutes are skipped.'
@@ -867,7 +879,7 @@ export const register: Register = on => {
             {pending.isQueued ? <Text color="warning">Waiting for the scan to finish, then it starts by itself…</Text> : null}
             <Box flexDirection="row" columnGap={1}>
               <Button key="confirm" variant="primary" onPress={() => void runAction($, pending)}>
-                {pending.isQueued ? 'Starting after the scan…' : pending.action === 'delete' ? 'Yes, delete' : pending.action === 'strip' ? 'Yes, clear' : pending.action === 'restore' ? 'Yes, restore' : 'Yes, move'}
+                {pending.isQueued ? 'Starting after the scan…' : pending.action === 'delete' ? 'Yes, delete' : pending.action === 'strip' ? 'Yes, clear' : pending.action === 'restore' ? 'Yes, restore' : pending.action === 'forget' ? 'Yes, remove' : 'Yes, move'}
               </Button>
               <Button key="cancel" onPress={() => void update($, pendingAtom, () => null)}>
                 Cancel
@@ -1014,6 +1026,18 @@ export const register: Register = on => {
           <Text dimColor size="caption">
             Session Manager © 2026 mothannakh · https://satisfy.live/
           </Text>
+          {emptyAccounts.length ? (
+            <Button
+              key="forget-open"
+              plain
+              dimColor
+              onPress={() =>
+                void ask({ action: 'forget', ids: emptyAccounts.map(a => a.accountUuid), label: `Remove ${emptyAccounts.length} empty account folder(s)`, bytes: 0 })
+              }
+            >
+              {`Remove ${emptyAccounts.length} empty account(s)`}
+            </Button>
+          ) : null}
           <Button key="diag-open" plain dimColor onPress={() => void runDiag($)}>
             Diagnostics
           </Button>

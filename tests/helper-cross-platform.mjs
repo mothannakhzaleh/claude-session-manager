@@ -198,3 +198,30 @@ test('move brings a chat from another account into the active one', () => {
   assert.equal(moved.isArchived, false)
   assert.ok(!fs.existsSync(path.join(sessions, ACCOUNT_OLD, ORG, `local_${S_APP}.json`)))
 })
+
+test('forget removes an emptied account folder and never the one the app uses', () => {
+  // After the restore and move above, the old account has no chat left.
+  const sessions = path.join(appRoot(home), 'claude-code-sessions')
+  const r = run('forget', '--ids', `${ACCOUNT_OLD},${ACCOUNT_NEW}`)
+  assert.equal(r.ok, true, r.error)
+  const byId = Object.fromEntries(r.results.map(x => [x.id, x]))
+  assert.equal(byId[ACCOUNT_OLD].ok, true, byId[ACCOUNT_OLD].reason)
+  assert.ok(!fs.existsSync(path.join(sessions, ACCOUNT_OLD)))
+  assert.equal(byId[ACCOUNT_NEW].ok, false)
+  assert.ok(fs.existsSync(path.join(sessions, ACCOUNT_NEW, ORG)))
+  assert.ok(fs.existsSync(path.join(claude, 'skills', 'keep-me', 'SKILL.md')))
+})
+
+test('forget refuses an account that still has a chat in the sidebar', () => {
+  const sessions = path.join(appRoot(home), 'claude-code-sessions')
+  const busy = '44444444-4444-4444-8444-444444444444'
+  const folder = path.join(sessions, busy, ORG)
+  fs.mkdirSync(folder, { recursive: true })
+  fs.writeFileSync(path.join(folder, 'local_cccccccc-0000-4000-8000-000000000001.json'), JSON.stringify({ cliSessionId: 'cccccccc-0000-4000-8000-000000000001' }))
+  const old = new Date(Date.now() - 5 * DAY)
+  fs.utimesSync(path.join(folder, 'local_cccccccc-0000-4000-8000-000000000001.json'), old, old)
+  const r = run('forget', '--ids', busy)
+  assert.equal(r.results[0].ok, false)
+  assert.match(r.results[0].reason, /still has chats/)
+  assert.ok(fs.existsSync(folder))
+})

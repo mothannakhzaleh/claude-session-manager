@@ -14,7 +14,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Helper script parses
         run: node --check scripts/sessions.mjs && node --check .github/scripts/bump-version.mjs

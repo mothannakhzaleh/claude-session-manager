@@ -38,6 +38,8 @@ export type AccountRow = {
 
 export type ScanResult = {
   ok: true
+  platform?: string // process.platform of the helper: win32, darwin or linux (older scans lack it)
+  trash?: string // what the system calls its bin: 'Recycle Bin' or 'Trash'
   scannedAt: string
   tookMs: number
   parsed: number

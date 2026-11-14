@@ -60,15 +60,40 @@ const STATE: Record<SessionRow['state'], { label: string; color: string }> = {
 
 // ---------- Node.js for the helper ----------
 
-// The helper needs Node.js 18 or newer. 'node' on PATH first, then the installer's
-// default folder (a fresh install is not on this process's PATH until the app restarts).
-const NODE_CANDIDATES = ['node', 'C:\\Program Files\\nodejs\\node.exe']
+// The helper needs Node.js 18 or newer. 'node' on PATH first, then the usual install folders
+// on Windows, macOS (Homebrew) and Linux: a fresh install, or one a desktop app's PATH leaves
+// out, is still found. A place that does not exist on this system simply fails to start.
+const NODE_CANDIDATES = [
+  'node',
+  'C:\\Program Files\\nodejs\\node.exe',
+  '/opt/homebrew/bin/node',
+  '/usr/local/bin/node',
+  '/usr/bin/node',
+  '/home/linuxbrew/.linuxbrew/bin/node',
+]
+const BREW_CANDIDATES = ['brew', '/opt/homebrew/bin/brew', '/usr/local/bin/brew', '/home/linuxbrew/.linuxbrew/bin/brew']
+const MANUAL_NODE = 'Install the LTS version from https://nodejs.org (or your package manager, for example `sudo apt install nodejs`), then press Scan.'
 const NODE_MIN_MAJOR = 18
 let nodeCmd = ''
 
+// A Node installed with nvm, fnm, volta or asdf is on the PATH only of an interactive shell,
+// which a desktop app started from the Dock or Finder does not have: ask the shells for it.
+// On Windows these shells do not exist and fail to start.
+async function nodeFromShell($: EngineInterface): Promise<string[]> {
+  const found: string[] = []
+  for (const shell of ['/bin/zsh', '/bin/bash']) {
+    try {
+      const r = await $.process.run([shell, '-ilc', 'command -v node'], { timeoutMs: 15_000 })
+      const p = r.stdout.trim().split(/\s+/).pop() ?? ''
+      if (r.exitCode === 0 && p.startsWith('/')) found.push(p)
+    } catch {}
+  }
+  return found
+}
+
 async function findNode($: EngineInterface): Promise<string> {
   if (nodeCmd) return nodeCmd
-  for (const candidate of NODE_CANDIDATES) {
+  for (const candidate of [...NODE_CANDIDATES, ...(await nodeFromShell($))]) {
     try {
       const r = await $.process.run([candidate, '--version'], { timeoutMs: 15_000 })
       const major = Number(/^v(\d+)\./.exec(r.stdout.trim())?.[1] ?? 0)
@@ -91,25 +116,46 @@ async function needNode($: EngineInterface): Promise<string> {
   return found
 }
 
-// Installs Node.js LTS with winget, the Windows package manager, from its official
-// OpenJS.NodeJS.LTS package. Runs only when the person presses the button; Windows may
-// ask for permission. Then scans with the new Node.
+// The first installer that starts on this system: winget on Windows, else Homebrew
+// (macOS, or Linux with Homebrew). The mod has no way to ask which system it is on, so it tries.
+async function nodeInstaller($: EngineInterface): Promise<{ name: string; argv: string[] } | undefined> {
+  const starts = async (cmd: string) => {
+    try {
+      return (await $.process.run([cmd, '--version'], { timeoutMs: 20_000 })).exitCode === 0
+    } catch {
+      return false
+    }
+  }
+  if (await starts('winget')) {
+    return {
+      name: 'winget',
+      argv: ['winget', 'install', '--id', 'OpenJS.NodeJS.LTS', '--exact', '--silent', '--accept-source-agreements', '--accept-package-agreements', '--disable-interactivity'],
+    }
+  }
+  for (const brew of BREW_CANDIDATES) if (await starts(brew)) return { name: 'Homebrew', argv: [brew, 'install', 'node'] }
+  return undefined
+}
+
+// Installs Node.js when the person presses the button: on Windows the LTS version from the
+// official OpenJS.NodeJS.LTS winget package (Windows may ask for permission), on a Mac (or
+// Linux) with Homebrew its `node` formula. Elsewhere it says how to install it. Then scans.
 async function installNode($: EngineInterface) {
   if ((await read($, nodeAtom)) === 'installing') return
   await update($, nodeAtom, () => 'installing')
-  await update($, noteAtom, () => 'Installing Node.js LTS with winget… Windows may ask for permission.')
+  await update($, noteAtom, () => 'Looking for an installer…')
   let note: string
-  try {
-    const r = await $.process.run(
-      ['winget', 'install', '--id', 'OpenJS.NodeJS.LTS', '--exact', '--silent', '--accept-source-agreements', '--accept-package-agreements', '--disable-interactivity'],
-      { timeoutMs: 600_000 },
-    )
-    nodeCmd = ''
-    note = (await findNode($))
-      ? 'Node.js is installed. Scanning…'
-      : `Node.js did not install (winget exited ${r.exitCode}). Install the LTS version from https://nodejs.org, then press Scan.`
-  } catch (err) {
-    note = `Could not run winget (${cut(errText(err), 80)}). Install the LTS version from https://nodejs.org, then press Scan.`
+  const installer = await nodeInstaller($)
+  if (!installer) {
+    note = `No winget or Homebrew found. ${MANUAL_NODE}`
+  } else {
+    await update($, noteAtom, () => `Installing Node.js with ${installer.name}… this can take a few minutes.`)
+    try {
+      const r = await $.process.run(installer.argv, { timeoutMs: 900_000 })
+      nodeCmd = ''
+      note = (await findNode($)) ? 'Node.js is installed. Scanning…' : `Node.js did not install (${installer.name} exited ${r.exitCode}). ${MANUAL_NODE}`
+    } catch (err) {
+      note = `Could not run ${installer.name} (${cut(errText(err), 80)}). ${MANUAL_NODE}`
+    }
   }
   await update($, nodeAtom, () => (nodeCmd ? '' : 'missing'))
   await update($, noteAtom, () => note)
@@ -226,7 +272,7 @@ async function runAction($: EngineInterface, p: Pending) {
     const done = results.filter(r => r.ok && !r.alreadyGone)
     const refused = results.filter(r => !r.ok)
     const bytes = done.reduce((a, r) => a + (r.freed ?? r.bytes ?? 0), 0)
-    const where = body.recycled && p.action !== 'move' ? ' (in the Recycle Bin; empty it to free the space)' : ''
+    const where = body.recycled && p.action !== 'move' ? ` (in the ${String(body.trash ?? 'Recycle Bin')}; empty it to free the space)` : ''
     note =
       p.action === 'delete'
         ? `Deleted ${done.length} session(s), ${mb(bytes)}${where}`
@@ -342,6 +388,8 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button, Select, Progress } = $.ui.resolve(e)
     const scan = await read($, scanAtom)
+    // Windows names it the Recycle Bin; macOS and Linux, the Trash. Known after the first scan.
+    const bin = scan?.trash ?? 'Recycle Bin'
     const view = await read($, viewAtom)
     const busy = await read($, busyAtom)
     const pending = await read($, pendingAtom)
@@ -365,8 +413,8 @@ export const register: Register = on => {
           </Text>
           <Text>
             {nodeState === 'installing'
-              ? 'winget is installing Node.js LTS. Windows may ask for permission; this can take a few minutes.'
-              : 'Session Manager reads your sessions with Node.js (free, from nodejs.org). Install it once with Windows’ winget, or from https://nodejs.org.'}
+              ? 'Installing Node.js. Your system may ask for permission; this can take a few minutes.'
+              : 'Session Manager reads your sessions with Node.js (free, from nodejs.org). The button installs it with winget on Windows or Homebrew on a Mac; you can also get it from https://nodejs.org.'}
           </Text>
           {nodeState === 'missing' && (
             <Box>
@@ -601,8 +649,8 @@ export const register: Register = on => {
         </Box>
         <Text dimColor size="caption">
           {card === 'accounts'
-            ? 'Only the sidebar entry moves; the old entry goes to the Recycle Bin. This uses the app’s own files, so an app update may change how it works.'
-            : 'Only session transcripts and their own folders are removed. Skills, plugins, mods, memory and settings are never touched. Removed files go to the Recycle Bin.'}
+            ? `Only the sidebar entry moves; the old entry goes to the ${bin}. This uses the app’s own files, so an app update may change how it works.`
+            : `Only session transcripts and their own folders are removed. Skills, plugins, mods, memory and settings are never touched. Removed files go to the ${bin}.`}
         </Text>
       </Box>
     ) : null
@@ -682,7 +730,7 @@ export const register: Register = on => {
               Claude sessions
             </Text>
             <Text dimColor size="caption">
-              {`Scanned ${age(Date.parse(scan.scannedAt))} · ${scan.users.length} Windows user(s) · ${scan.accounts.length} Claude account folder(s)`}
+              {`Scanned ${age(Date.parse(scan.scannedAt))} · ${scan.users.length} user(s) · ${scan.accounts.length} Claude account folder(s)`}
             </Text>
           </Box>
           <Button key="rescan" onPress={() => void runScan($)}>
@@ -722,12 +770,12 @@ export const register: Register = on => {
             </Box>
             <Text>
               {pending.action === 'restore'
-                ? 'Gives each chat a new entry in this app’s sidebar (Active list) so you can continue it, and moves the app’s “deleted” mark to the Recycle Bin. The conversation is not changed. Restart the Claude app afterwards.'
+                ? `Gives each chat a new entry in this app’s sidebar (Active list) so you can continue it, and moves the app’s “deleted” mark to the ${bin}. The conversation is not changed. Restart the Claude app afterwards.`
                 : pending.action === 'move'
                 ? 'Each chat leaves its old account’s sidebar and joins this one. Restart the Claude app afterwards. Chats open now or used in the last 15 minutes are skipped.'
                 : pending.action === 'delete'
-                  ? `About ${mb(pending.bytes)}. The transcript and its side files go to the Recycle Bin, where you can restore them. Sessions open now, used in the last 15 minutes or still in the app list are skipped.`
-                  : `About ${mb(pending.bytes)}. The conversation stays; each upload becomes a placeholder. The original goes to the Recycle Bin. Sessions open now or used in the last 15 minutes are skipped.`}
+                  ? `About ${mb(pending.bytes)}. The transcript and its side files go to the ${bin}, where you can restore them. Sessions open now, used in the last 15 minutes or still in the app list are skipped.`
+                  : `About ${mb(pending.bytes)}. The conversation stays; each upload becomes a placeholder. The original goes to the ${bin}. Sessions open now or used in the last 15 minutes are skipped.`}
             </Text>
             {pending.isQueued ? <Text color="warning">Waiting for the scan to finish, then it starts by itself…</Text> : null}
             <Box flexDirection="row" columnGap={1}>

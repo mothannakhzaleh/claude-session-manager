@@ -4,15 +4,15 @@
 [![Release](https://github.com/mothannakhzaleh/claude-session-manager/actions/workflows/release.yml/badge.svg)](https://github.com/mothannakhzaleh/claude-session-manager/actions/workflows/release.yml)
 [![Check](https://github.com/mothannakhzaleh/claude-session-manager/actions/workflows/check.yml/badge.svg)](https://github.com/mothannakhzaleh/claude-session-manager/actions/workflows/check.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+![Windows | macOS | Linux](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0078D6)
 
-See every Claude Code session on your PC, for every Claude account, in one pane: what each one cost in tokens, how much disk it uses and what is inside it. Then clean up safely: clear uploaded images and files, delete old sessions and leftover logs, and move chats from another account into the one you use now.
+See every Claude Code session on your computer (Windows, macOS or Linux), for every Claude account, in one pane: what each one cost in tokens, how much disk it uses and what is inside it. Then clean up safely: clear uploaded images and files, delete old sessions and leftover logs, and move chats from another account into the one you use now.
 
 ![Overview: tiles for conversations, leftover logs, uploads, old sessions, other accounts and tokens, then the session list](docs/images/overview.png)
 
 ## What it does
 
-- **Every session, every account.** Lists Claude Code sessions from all accounts and Windows users on the PC, grouped by account, with filters (conversations, leftover logs, with uploads, older than N days) and sorting (recent, largest, most tokens).
+- **Every session, every account.** Lists Claude Code sessions from all accounts and users on the computer, grouped by account, with filters (conversations, leftover logs, with uploads, older than N days) and sorting (recent, largest, most tokens).
 - **Token totals.** Input, output, cache write and cache read for each session, each account and everything together. Each reply is counted once, and subagent runs are included.
 - **Clear uploads.** Pasted screenshots and uploaded files stay inside transcripts and can take hundreds of MB. Clearing keeps the conversation and puts a small placeholder where each upload was.
 - **Delete old sessions and leftover logs.** Background summary runs ("Below is a conversation log…") pile up with no real replies. One click removes them, along with old conversations you no longer use.
@@ -34,14 +34,23 @@ See every Claude Code session on your PC, for every Claude account, in one pane:
 - Skills, plugins, mods, memory, agents, commands, hooks and settings are never touched: the helper only accepts session files by their exact shape and refuses anything inside those folders.
 - The session you are using, sessions open in a running Claude process, and sessions written in the last 15 minutes are skipped.
 - Conversations still in the app's list are not deleted here. Delete them in the app first; their leftover files can then be cleared here.
-- Deleted and replaced files go to the **Recycle Bin**, so you can restore them.
+- Deleted and replaced files go to the **Recycle Bin** (Windows) or the **Trash** (macOS, Linux), so you can restore them.
 - Every delete, clear and move asks you first.
 - Credentials are never read. Of the account file it reads only the account id, email and organization name, to label accounts on your screen. Nothing is sent anywhere.
 
 ## Requirements
 
-- Windows 10 or 11 with Claude Code (the desktop app or the terminal).
-- **Node.js 18 or newer.** If it is missing, the pane shows an **Install Node.js** button that installs the LTS version with winget (Windows' package manager) from the official `OpenJS.NodeJS.LTS` package. Windows may ask for permission. You can also install it yourself from [nodejs.org](https://nodejs.org).
+- Claude Code (the desktop app or the terminal) on one of:
+
+  | System | Tested in CI | Notes |
+  | --- | --- | --- |
+  | Windows 10 or 11 | yes | Removed files go to the Recycle Bin. |
+  | macOS | yes | Removed files go to the Trash (with Finder's **Put Back** where macOS has the `trash` command). Moving and restoring app sidebar entries expects the app's data in `~/Library/Application Support/Claude` and is not yet confirmed on a real Mac: please [report](https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose) how it goes. |
+  | Linux | yes | Removed files go to the desktop Trash (`~/.local/share/Trash`). Claude has no official Linux desktop app, so moving and restoring sidebar entries applies only to a build that keeps its data in `~/.config/Claude`. |
+
+  "Tested in CI" means the helper's scan, view, clear, delete, move and restore run on that system against made-up sessions.
+
+- **Node.js 18 or newer.** If it is missing, the pane shows an **Install Node.js** button: on Windows it installs the LTS version with winget from the official `OpenJS.NodeJS.LTS` package (Windows may ask for permission); on a Mac (or Linux) with [Homebrew](https://brew.sh) it runs `brew install node`. Otherwise install it from [nodejs.org](https://nodejs.org) or your package manager (for example `sudo apt install nodejs`).
 
 ## Install
 

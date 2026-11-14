@@ -125,18 +125,6 @@ async function runningSessions(claude) {
   return ids
 }
 
-// Only these three fields of ~/.claude.json are read: the signed-in account's id and label.
-async function signedInAccount(home) {
-  try {
-    const o = JSON.parse(await fsp.readFile(path.join(home, '.claude.json'), 'utf8'))
-    const a = o?.oauthAccount
-    if (!a?.accountUuid) return undefined
-    return { accountUuid: a.accountUuid, email: a.emailAddress, org: a.organizationName }
-  } catch {
-    return undefined
-  }
-}
-
 // The desktop app's data folders under a home, each of which may hold claude-code-sessions:
 //   Windows  AppData\Local\Claude-Data\<install>   (older builds: AppData\Roaming\Claude)
 //   macOS    Library/Application Support/Claude
@@ -320,24 +308,18 @@ async function scan() {
 
   for (const prof of profs) {
     const { index, accounts: accs } = await desktopIndex(prof.home)
-    const me = await signedInAccount(prof.home)
     const running = await runningSessions(prof.claude)
     const newest = Math.max(0, ...[...accs.values()].map(a => a.lastWriteMs))
     for (const a of accs.values()) {
-      const isMe = me?.accountUuid === a.accountUuid
       accounts.push({
         user: prof.user,
         accountUuid: a.accountUuid,
-        label: isMe ? (me.email ?? 'terminal login') : `account ${a.accountUuid.slice(0, 8)}`,
-        isSignedIn: isMe, // the terminal (CLI) login
+        label: `account ${a.accountUuid.slice(0, 8)}`, // ~/.claude.json is never read, so no email
         isAppActive: newest > 0 && a.lastWriteMs === newest, // the account the desktop app uses now
         orgs: a.orgs.size,
         indexed: a.indexed,
         deletedMarkers: a.deletedMarkers,
       })
-    }
-    if (me && !accs.has(me.accountUuid)) {
-      accounts.push({ user: prof.user, accountUuid: me.accountUuid, label: me.email ?? 'terminal login', isSignedIn: true, isAppActive: false, orgs: 0, indexed: 0, deletedMarkers: 0 })
     }
     const projectsDir = path.join(prof.claude, 'projects')
     for (const project of await dirs(projectsDir)) {
@@ -1067,7 +1049,7 @@ async function diag() {
     if (n) projects++
     transcripts += n
   }
-  add(`- This user: ${transcripts} transcript(s) in ${projects} project folder(s); terminal login: ${(await signedInAccount(home)) ? 'yes' : 'no'}`)
+  add(`- This user: ${transcripts} transcript(s) in ${projects} project folder(s)`)
 
   // The desktop app folders the helper checks on this system, and what each holds.
   add('', '**Desktop app folders checked**', '')

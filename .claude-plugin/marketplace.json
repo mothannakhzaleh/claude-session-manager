@@ -1,6 +1,9 @@
 {
   "name": "claude-session-manager",
   "owner": { "name": "mothannakh", "url": "https://satisfy.live/" },
+  "metadata": {
+    "description": "Session Manager for Claude Code: see, clean up and restore your Claude sessions on Windows, by mothannakh"
+  },
   "plugins": [
     {
       "name": "session-manager",

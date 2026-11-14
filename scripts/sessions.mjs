@@ -542,14 +542,13 @@ function freeName(dir, base, taken = name => fs.existsSync(path.join(dir, name))
   }
 }
 
-// macOS: the system `trash` command (macOS 14 and newer) keeps Finder's "Put Back"; older
-// systems get a plain move into ~/.Trash.
+// macOS: the system `trash` command, where the system has one, keeps Finder's "Put Back".
+// Whatever it did not move (no such command, or it refused) gets a plain move into ~/.Trash.
 function trashMac(paths) {
-  const r = spawnSync('/usr/bin/trash', paths, { encoding: 'utf8' })
-  if (!r.error) return paths.filter(p => fs.existsSync(p))
+  spawnSync('/usr/bin/trash', paths, { encoding: 'utf8' })
   const dir = path.join(os.homedir(), '.Trash')
   const failed = []
-  for (const p of paths) {
+  for (const p of paths.filter(x => fs.existsSync(x))) {
     try {
       fs.mkdirSync(dir, { recursive: true })
       fs.renameSync(p, path.join(dir, freeName(dir, path.basename(p))))

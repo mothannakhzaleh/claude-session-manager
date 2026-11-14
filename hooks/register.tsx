@@ -76,9 +76,24 @@ const MANUAL_NODE = 'Install the LTS version from https://nodejs.org (or your pa
 const NODE_MIN_MAJOR = 18
 let nodeCmd = ''
 
+// A Node installed with nvm, fnm, volta or asdf is on the PATH only of an interactive shell,
+// which a desktop app started from the Dock or Finder does not have: ask the shells for it.
+// On Windows these shells do not exist and fail to start.
+async function nodeFromShell($: EngineInterface): Promise<string[]> {
+  const found: string[] = []
+  for (const shell of ['/bin/zsh', '/bin/bash']) {
+    try {
+      const r = await $.process.run([shell, '-ilc', 'command -v node'], { timeoutMs: 15_000 })
+      const p = r.stdout.trim().split(/\s+/).pop() ?? ''
+      if (r.exitCode === 0 && p.startsWith('/')) found.push(p)
+    } catch {}
+  }
+  return found
+}
+
 async function findNode($: EngineInterface): Promise<string> {
   if (nodeCmd) return nodeCmd
-  for (const candidate of NODE_CANDIDATES) {
+  for (const candidate of [...NODE_CANDIDATES, ...(await nodeFromShell($))]) {
     try {
       const r = await $.process.run([candidate, '--version'], { timeoutMs: 15_000 })
       const major = Number(/^v(\d+)\./.exec(r.stdout.trim())?.[1] ?? 0)

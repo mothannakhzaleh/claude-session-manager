@@ -45,8 +45,10 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
   | System | Tested in CI | Notes |
   | --- | --- | --- |
   | Windows 10 or 11 | yes | Removed files go to the Recycle Bin. |
-  | macOS | yes | Removed files go to the Trash (with Finder's **Put Back** on macOS 14 and newer). |
-  | Linux | yes | Removed files go to the desktop Trash (`~/.local/share/Trash`). Claude has no official Linux desktop app, so the app features (move, restore) apply only to a community build that keeps its data in `~/.config/Claude`. |
+  | macOS | yes | Removed files go to the Trash (with Finder's **Put Back** where macOS has the `trash` command). Moving and restoring app sidebar entries expects the app's data in `~/Library/Application Support/Claude` and is not yet confirmed on a real Mac: please [report](https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose) how it goes. |
+  | Linux | yes | Removed files go to the desktop Trash (`~/.local/share/Trash`). Claude has no official Linux desktop app, so moving and restoring sidebar entries applies only to a build that keeps its data in `~/.config/Claude`. |
+
+  "Tested in CI" means the helper's scan, view, clear, delete, move and restore run on that system against made-up sessions.
 
 - **Node.js 18 or newer.** If it is missing, the pane shows an **Install Node.js** button: on Windows it installs the LTS version with winget from the official `OpenJS.NodeJS.LTS` package (Windows may ask for permission); on a Mac (or Linux) with [Homebrew](https://brew.sh) it runs `brew install node`. Otherwise install it from [nodejs.org](https://nodejs.org) or your package manager (for example `sudo apt install nodejs`).
 

@@ -41,6 +41,31 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
 - Every delete, clear and move asks you first.
 - Credentials are never read. Of the account file it reads only the account id, email and organization name, to label accounts on your screen. Nothing is sent anywhere.
 
+## What it reads, runs and sends
+
+**What it sends:** nothing. The mod and its helper make no network requests and send no data anywhere. The one time anything is downloaded is when you press **Install Node.js**: winget or Homebrew then downloads Node.js from its own official source.
+
+When Claude opens the pane for you (the `sessions` skill and its `open_sessions` tool), the tool answers Claude with a short summary that becomes part of the chat: session and log counts, disk use, token totals, and per account a number ("account 1 · this app"), its session count and output tokens. It holds no email, account id, organization, chat title or conversation text.
+
+**What it reads, all on your computer:**
+
+- Session transcripts and their side folders under `~/.claude` (`projects`, `file-history`, `session-env`). Conversation text is read to count tokens and uploads, to find titles, and for **View**, and is shown only on your screen.
+- The Claude desktop app's sidebar index (`claude-code-sessions` in the app's data folder), to show which chats are in the app and to move or restore them.
+- From `~/.claude.json`, only `oauthAccount.accountUuid`, `emailAddress` and `organizationName`, to label accounts on your screen. No token or password is read: the credentials file (`~/.claude/.credentials.json`, or the system keychain) is never opened.
+
+**Programs it starts, and why:**
+
+| Program and arguments (written out in full in [hooks/register.tsx](hooks/register.tsx) and [scripts/sessions.mjs](scripts/sessions.mjs)) | When | Why |
+| --- | --- | --- |
+| `node scripts/sessions.mjs scan`, `peek`, `strip`, `delete`, `move`, `restore` or `diag` | Scanning, **View**, **Diagnostics** and each action you confirm | The helper that does the work, on local files only |
+| `node --version`, then the same with `C:\Program Files\nodejs\node.exe`, `/opt/homebrew/bin/node`, `/usr/local/bin/node`, `/usr/bin/node` and `/home/linuxbrew/.linuxbrew/bin/node` | First use in a session | Finds Node.js 18 or newer |
+| `/bin/zsh -ilc "command -v node"` and `/bin/bash -ilc "command -v node"`, then `--version` on the path they print | Only when none of the places above has Node.js (on Windows these shells do not exist and fail to start) | Finds a Node.js installed with nvm, fnm or volta, which only your shell knows |
+| `winget --version`, then `brew --version` with `brew`, `/opt/homebrew/bin/brew`, `/usr/local/bin/brew` and `/home/linuxbrew/.linuxbrew/bin/brew` | When you press **Install Node.js** | Picks the installer this system has |
+| `winget install --id OpenJS.NodeJS.LTS --exact --silent --accept-source-agreements --accept-package-agreements --disable-interactivity` | **Install Node.js** on Windows | Installs Node.js LTS from its official package |
+| `brew install node`, with the `brew` found above | **Install Node.js** on a Mac (or Linux with Homebrew) | Installs Node.js |
+| `pwsh` or `powershell -NoProfile -NonInteractive -Command <fixed script>` | Windows, when a confirmed delete, clear, move or restore removes files | Sends them to the Recycle Bin (the script is fixed text in `recycleWindows`) |
+| `/usr/bin/trash <files>` | macOS, the same moments | Sends them to the Trash with Finder's **Put Back** |
+
 ## Requirements
 
 - Claude Code (the desktop app or the terminal) on one of:

@@ -73,6 +73,10 @@ test('the pane lists sessions and asks before deleting, on every surface', async
   // The tool behind the plugin's skill opens the pane and answers with the numbers.
   const opened = await $.tool.call({ tool: 'mcp__session-manager__open_sessions' })
   expect(JSON.stringify(opened)).toContain('Sessions pane')
+  // That answer reaches the chat: accounts are numbered, never named.
+  expect(JSON.stringify(opened)).toContain('account 1')
+  expect(JSON.stringify(opened)).not.toContain('alice@example.test')
+  expect(JSON.stringify(opened)).not.toContain(ACC)
 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })

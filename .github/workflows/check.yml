@@ -1,0 +1,35 @@
+# Quick checks on every pull request and push: the helper script parses and every
+# manifest is valid JSON with the fields Claude Code needs.
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Helper script parses
+        run: node --check scripts/sessions.mjs && node --check .github/scripts/bump-version.mjs
+
+      - name: Manifests are valid
+        run: |
+          node -e '
+            const fs = require("fs")
+            const read = f => JSON.parse(fs.readFileSync(f, "utf8"))
+            const p = read(".claude-plugin/plugin.json")
+            const m = read(".claude-plugin/marketplace.json")
+            const h = read("hooks/hooks.json")
+            if (p.name !== "session-manager") throw new Error("plugin.json name changed")
+            if (!/^\d+\.\d+\.\d+$/.test(p.version)) throw new Error("plugin.json version is not x.y.z")
+            if (!m.plugins?.some(x => x.name === p.name)) throw new Error("marketplace.json does not list the plugin")
+            for (const mod of h.modules ?? []) if (!fs.existsSync("hooks/" + mod)) throw new Error("missing hooks module " + mod)
+            console.log("manifests ok,", p.name, p.version)
+          '

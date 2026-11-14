@@ -1,0 +1,25 @@
+name: Feature request
+description: Suggest an idea for Session Manager
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: For open-ended ideas you would like to talk through first, use [Discussions → Ideas](https://github.com/mothannakhzaleh/claude-session-manager/discussions/categories/ideas).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would it solve?
+      placeholder: I have hundreds of old sessions and want to ...
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you tried instead?

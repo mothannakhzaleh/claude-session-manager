@@ -1,5 +1,11 @@
 # Session Manager for Claude Code
 
+[![Latest release](https://img.shields.io/github/v/release/mothannakhzaleh/claude-session-manager?label=release)](https://github.com/mothannakhzaleh/claude-session-manager/releases/latest)
+[![Release](https://github.com/mothannakhzaleh/claude-session-manager/actions/workflows/release.yml/badge.svg)](https://github.com/mothannakhzaleh/claude-session-manager/actions/workflows/release.yml)
+[![Check](https://github.com/mothannakhzaleh/claude-session-manager/actions/workflows/check.yml/badge.svg)](https://github.com/mothannakhzaleh/claude-session-manager/actions/workflows/check.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Windows](https://img.shields.io/badge/platform-Windows-0078D6)
+
 See every Claude Code session on your PC, for every Claude account, in one pane: what each one cost in tokens, how much disk it uses and what is inside it. Then clean up safely: clear uploaded images and files, delete old sessions and leftover logs, and move chats from another account into the one you use now.
 
 ![Overview: tiles for conversations, leftover logs, uploads, old sessions, other accounts and tokens, then the session list](docs/images/overview.png)
@@ -78,6 +84,12 @@ Every change pushed to this repository is released as a new version automaticall
   ```bash
   claude plugin update session-manager@claude-session-manager
   ```
+
+## Help and contributing
+
+- Questions and ideas: [Discussions](https://github.com/mothannakhzaleh/claude-session-manager/discussions)
+- Bugs: [open an issue](https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose)
+- Want to help? Read [CONTRIBUTING.md](CONTRIBUTING.md). Security problems: [SECURITY.md](SECURITY.md).
 
 ## License
 

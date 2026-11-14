@@ -1,0 +1,68 @@
+name: Bug report
+description: Something in Session Manager does not work as it should
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Please do not paste emails, account ids, API keys or private folder names.**
+        Session titles and paths can be personal: replace them with something like `my-project` before posting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong?
+      placeholder: I pressed "Clear all" in the Uploads card and nothing happened.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Type /sessions
+        2. Open the Uploads card
+        3. Press "Clear all"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where do you use Claude Code?
+      options:
+        - Claude desktop app
+        - Terminal (claude CLI)
+        - VS Code extension
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Session Manager version
+      description: "From `claude plugin list` (for example 0.3.1)"
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: "From `node --version`, or \"not installed\""
+  - type: textarea
+    id: details
+    attributes:
+      label: Message or screenshot
+      description: The text the pane or toast showed. Remove anything personal first.
+      render: text

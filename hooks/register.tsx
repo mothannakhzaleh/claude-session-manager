@@ -198,7 +198,26 @@ async function helperWithProgress($: EngineInterface, action: Pending['action'],
 }
 
 async function runAction($: EngineInterface, p: Pending) {
-  if ((await read($, workAtom)) || (await read($, busyAtom))) return // one run at a time
+  if (p.isQueued) return // already waiting for the scan
+  if (await read($, workAtom)) {
+    // One run at a time: say so instead of ignoring the press.
+    await update($, noteAtom, () => 'Another cleanup is still running; confirm again when it ends.')
+    $.ui.toast('Another cleanup is still running')
+    return
+  }
+  if (await read($, busyAtom)) {
+    // A scan is running: keep the confirmed action and start it when the scan ends.
+    await update($, pendingAtom, () => ({ ...p, isQueued: true }))
+    const deadline = Date.now() + 5 * 60_000
+    while ((await read($, busyAtom)) && Date.now() < deadline) await $.clock.sleep(400)
+    const still = await read($, pendingAtom)
+    if (!still?.isQueued || still.ids.join() !== p.ids.join()) return // cancelled meanwhile
+    if (await read($, busyAtom)) {
+      await update($, pendingAtom, () => ({ ...p, isQueued: false }))
+      await update($, noteAtom, () => 'The scan is taking long; confirm again when it ends.')
+      return
+    }
+  }
   await update($, pendingAtom, () => null)
   const [verb, noun] = LABEL[p.action]
   const label = `${verb} ${p.ids.length} ${noun}`
@@ -691,14 +710,29 @@ export const register: Register = on => {
         {pending && (
           <Box flexDirection="column" borderStyle="round" borderColor="warning" paddingX={1} rowGap={1}>
             <Text bold color="warning">{`${pending.label}?`}</Text>
+            {/* Exactly what the action touches, so the person confirms names, not a count. */}
+            <Box flexDirection="column">
+              {pending.ids.slice(0, 5).map(id => {
+                const s = scan.sessions.find(x => x.id === id)
+                return (
+                  <Text key={`pend-${id}`} wrap="truncate-end">
+                    {`• ${cut((s?.title ?? id).replace(/\s+/g, ' '), Math.max(20, cols - 24))}${s ? ` · ${mb(pending.action === 'strip' ? s.uploads.bytes : s.bytes.total)}` : ''}`}
+                  </Text>
+                )
+              })}
+              {pending.ids.length > 5 ? <Text dimColor>{`…and ${pending.ids.length - 5} more`}</Text> : null}
+            </Box>
             <Text>
               {pending.action === 'move'
                 ? 'Each chat leaves its old account’s sidebar and joins this one. Restart the Claude app afterwards. Chats open now or used in the last 15 minutes are skipped.'
-                : `About ${mb(pending.bytes)}. Sessions open now or used in the last 15 minutes are skipped.`}
+                : pending.action === 'delete'
+                  ? `About ${mb(pending.bytes)}. The transcript and its side files go to the Recycle Bin, where you can restore them. Sessions open now, used in the last 15 minutes or still in the app list are skipped.`
+                  : `About ${mb(pending.bytes)}. The conversation stays; each upload becomes a placeholder. The original goes to the Recycle Bin. Sessions open now or used in the last 15 minutes are skipped.`}
             </Text>
+            {pending.isQueued ? <Text color="warning">Waiting for the scan to finish, then it starts by itself…</Text> : null}
             <Box flexDirection="row" columnGap={1}>
               <Button key="confirm" variant="primary" onPress={() => void runAction($, pending)}>
-                {pending.action === 'delete' ? 'Yes, delete' : pending.action === 'strip' ? 'Yes, clear' : 'Yes, move'}
+                {pending.isQueued ? 'Starting after the scan…' : pending.action === 'delete' ? 'Yes, delete' : pending.action === 'strip' ? 'Yes, clear' : 'Yes, move'}
               </Button>
               <Button key="cancel" onPress={() => void update($, pendingAtom, () => null)}>
                 Cancel

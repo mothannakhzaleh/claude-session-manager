@@ -77,6 +77,9 @@ test('the pane lists sessions and asks before deleting, on every surface', async
 
     await ui.press({ key: 'del-11111111-1111-4111-8111-111111111111' })
     expect((await ui.find({ type: 'Text', text: /^Delete "Session 1111"/ }))?.text).toContain('and its files?')
+    // The confirmation names what it deletes and where it goes.
+    expect((await ui.find({ type: 'Text', text: /^• Session 1111 · / }))?.text).toContain('2.0 MB')
+    expect(await ui.find({ type: 'Text', text: /Recycle Bin, where you can restore them/ })).toBeDefined()
     await ui.press({ key: 'cancel' })
     expect(await ui.find({ key: 'confirm' })).toBeUndefined()
 

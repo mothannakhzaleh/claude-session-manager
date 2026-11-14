@@ -85,6 +85,7 @@ export type Pending = {
   ids: string[]
   label: string
   bytes: number
+  isQueued?: boolean // confirmed while a scan ran; starts when the scan ends
 }
 
 // Whether the helper's Node.js was found: '' found (or not checked yet), 'missing', 'installing'.

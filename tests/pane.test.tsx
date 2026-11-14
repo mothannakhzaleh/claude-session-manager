@@ -38,6 +38,8 @@ const SCAN: ScanResult = {
   accounts: [
     { user: 'alice', accountUuid: ACC, label: 'account aaaaaaaa', isAppActive: false, orgs: 1, indexed: 1, deletedMarkers: 0 },
     { user: 'alice', accountUuid: APP, label: 'account cccccccc', isAppActive: true, orgs: 1, indexed: 0, deletedMarkers: 0 },
+    // An old sign-in with nothing left: only its app folder remains.
+    { user: 'alice', accountUuid: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', label: 'account eeeeeeee', isAppActive: false, orgs: 1, indexed: 0, deletedMarkers: 0 },
   ],
   total: { input: 10, output: 4500, cacheWrite: 100, cacheRead: 9000, messages: 9 },
   models: {},
@@ -142,6 +144,13 @@ test('the pane lists sessions and asks before deleting, on every surface', async
     await ui.select({ key: 'account', value: ACC })
     expect((await ui.find({ type: 'Text', text: /^Conversations · / }))?.text).toBe('Conversations · 1')
     await ui.select({ key: 'account', value: 'all' })
+    // An account with no chats left can have its app folder removed, never the app's own (APP has no sessions either).
+    expect((await ui.find({ key: 'forget-open' }))?.text).toBe('Remove 1 empty account(s)')
+    await ui.press({ key: 'forget-open' })
+    expect(await ui.find({ type: 'Text', text: /^Remove 1 empty account folder\(s\)\?$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^• account eeeeeeee · no chats left$/ })).toBeDefined()
+    expect((await ui.find({ key: 'confirm' }))?.text).toBe('Yes, remove')
+    await ui.press({ key: 'cancel' })
     // Diagnostics shows a report to copy into a bug report.
     expect(await ui.find({ key: 'diag-copy' })).toBeUndefined()
     await ui.press({ key: 'diag-open' })

@@ -23,6 +23,7 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
 - **View what is inside a chat.** When it ran, model, branch, what you asked, Claude's last replies, the tools it used and the files it worked on, without opening the chat.
 - **Bring chats from another account.** Moves a chat's sidebar entry into the account the Claude app uses now, so you can continue it there. It lands in your Active list. The conversation itself stays where it is, so nothing is duplicated or left behind.
 - **Restore deleted chats to the sidebar.** A chat you deleted in the app often still has its conversation on disk ("Deleted in app, files left"). **Restore to sidebar** gives it a new entry in your Active list so you can continue it. The conversation is not changed.
+- **Remove empty accounts.** Every account you ever signed in to in the Claude app keeps a small folder in the app's data, even after you sign out. When an account has no chats left, **Remove N empty account(s)** in the pane footer sends its folder to the Recycle Bin or Trash. The account the app uses now, and any account with chats left, are never touched.
 - **Small widget.** In the Claude desktop app a small Sessions widget opens beside the chat with the main numbers. Turn it off from the pane footer.
 - **Diagnostics.** The **Diagnostics** button in the pane footer shows a short report (versions, where removed files go, which Claude folders exist and how many sessions each holds) with a **Copy report** button for bug reports. It holds no emails, account ids, user names or chat titles.
 
@@ -38,7 +39,7 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
 - The session you are using, sessions open in a running Claude process, and sessions written in the last 15 minutes are skipped.
 - Conversations still in the app's list are not deleted here. Delete them in the app first; their leftover files can then be cleared here.
 - Deleted and replaced files go to the **Recycle Bin** (Windows) or the **Trash** (macOS, Linux), so you can restore them.
-- Every delete, clear and move asks you first.
+- Every delete, clear, move, restore and account removal asks you first.
 - No login, account or password data is read. Accounts are shown by the start of their id ("account 1a2b3c4d"), taken from the app's folder names. Nothing is sent anywhere.
 
 ## What it reads, runs and sends
@@ -50,7 +51,7 @@ When Claude opens the pane for you (the `manage-sessions` skill and its `open_se
 **What it reads, all on your computer:**
 
 - Session transcripts and their side folders under `~/.claude` (`projects`, `file-history`, `session-env`). Conversation text is read to count tokens and uploads, to find titles, and for **View**, and is shown only on your screen.
-- The Claude desktop app's sidebar index (`claude-code-sessions` in the app's data folder), to show which chats are in the app and to move or restore them.
+- The Claude desktop app's sidebar index (`claude-code-sessions` in the app's data folder), to show which chats are in the app, to move or restore them, and to remove the folder of an account with no chats left.
 - Nothing else: no login or account data, and no files outside the folders above.
 
 **Hooks it adds:** `session.start` (registers `/sessions` and the `open_sessions` tool, and opens the widget on the desktop app), `command.run` for `/sessions`, `ui.render` for the pane, and `tool.call` for its own tool `mcp__session-manager__open_sessions` only. That `tool.call` hook answers calls to this one tool (it opens the pane and returns the summary above); it never sees, changes or blocks calls to any other tool.
@@ -59,7 +60,7 @@ When Claude opens the pane for you (the `manage-sessions` skill and its `open_se
 
 | Program and arguments (written out in full in [hooks/register.tsx](hooks/register.tsx) and [scripts/sessions.mjs](scripts/sessions.mjs)) | When | Why |
 | --- | --- | --- |
-| `node scripts/sessions.mjs scan`, `peek`, `strip`, `delete`, `move`, `restore` or `diag` | Scanning, **View**, **Diagnostics** and each action you confirm | The helper that does the work, on local files only |
+| `node scripts/sessions.mjs scan`, `peek`, `strip`, `delete`, `move`, `restore`, `forget` (remove an empty account folder) or `diag` | Scanning, **View**, **Diagnostics** and each action you confirm | The helper that does the work, on local files only |
 | `node --version`, then the same with `C:\Program Files\nodejs\node.exe`, `/opt/homebrew/bin/node`, `/usr/local/bin/node`, `/usr/bin/node` and `/home/linuxbrew/.linuxbrew/bin/node` | First use in a session | Finds Node.js 18 or newer |
 | `/bin/zsh -ilc "command -v node"` and `/bin/bash -ilc "command -v node"`, then `--version` on the path they print | Only when none of the places above has Node.js (on Windows these shells do not exist and fail to start) | Finds a Node.js installed with nvm, fnm or volta, which only your shell knows |
 | `winget --version`, then `brew --version` with `brew`, `/opt/homebrew/bin/brew`, `/usr/local/bin/brew` and `/home/linuxbrew/.linuxbrew/bin/brew` | When you press **Install Node.js** | Picks the installer this system has |

@@ -6,6 +6,7 @@
 //   node sessions.mjs scan   [--exclude <id>]
 //   node sessions.mjs strip  --ids a,b [--exclude <id>] [--permanent]
 //   node sessions.mjs delete --ids a,b [--exclude <id>] [--permanent]
+//   node sessions.mjs forget --ids <account>,...   (an account's app folder, only when no chat is left in it)
 //   node sessions.mjs diag   (a report for bug reports: no emails, ids or user names)
 //   --users-root <dir>   folder holding user profiles (default: the folder above your home, such as
 //                        C:\Users, /Users or /home; tests use a fixture)
@@ -827,6 +828,68 @@ async function move(ids) {
   out({ ok: true, to: target.accountUuid, recycled: !flag('permanent'), trash: TRASH_NAME, results })
 }
 
+// ---------- forget: remove the app's folder of an account with nothing left in it ----------
+
+// The folders of one account in the app's index, each checked: <app root>/claude-code-sessions/<id>,
+// not a link, holding only UUID-named org folders of plain files, none a sidebar entry and no
+// "deleted" mark whose conversation is still on disk. Answers { folders } or { why }.
+async function emptyAccountFolders(roots, id) {
+  const folders = []
+  for (const root of roots) {
+    const folder = path.join(root, 'claude-code-sessions', id)
+    const st = await fsp.lstat(folder).catch(() => undefined)
+    if (!st) continue
+    if (st.isSymbolicLink() || !st.isDirectory()) return { why: 'unexpected app folder layout' }
+    for (const org of await fsp.readdir(folder, { withFileTypes: true })) {
+      if (!org.isDirectory() || !UUID.test(org.name)) return { why: 'holds files Session Manager does not know' }
+      const orgDir = path.join(folder, org.name)
+      if (!appShape(roots, orgDir, false)) return { why: 'unexpected app folder layout' }
+      for (const f of await fsp.readdir(orgDir, { withFileTypes: true })) {
+        if (!f.isFile()) return { why: 'holds files Session Manager does not know' }
+        if (f.name.startsWith('local_')) return { why: 'still has chats in the sidebar' }
+        if (f.name.startsWith('deleted_')) {
+          const t = await targetsOf(f.name.slice(8))
+          if (t && !t.isMissing) return { why: 'has deleted chats whose conversation is still on disk (restore or delete them first)' }
+        }
+      }
+    }
+    folders.push(folder)
+  }
+  return folders.length ? { folders } : { why: 'not found in this user’s Claude app folders' }
+}
+
+async function forget(ids) {
+  const prof = (await once('profiles', profiles)).find(p => !selfProfile || p.home === selfProfile) ?? (await profiles())[0]
+  if (!prof) fail('no profile')
+  const { accounts } = await desktopIndex(prof.home)
+  const roots = await appRoots(prof.home)
+  const newest = [...accounts.values()].sort((a, b) => b.lastWriteMs - a.lastWriteMs)[0]
+  const results = []
+  progress(0, ids.length, 0)
+  for (const id of ids) {
+    if (results.length) progress(results.length, ids.length, 0)
+    if (!UUID.test(id)) {
+      results.push({ id, ok: false, reason: 'not an account id' })
+      continue
+    }
+    if (newest?.accountUuid === id) {
+      results.push({ id, ok: false, reason: 'the account the Claude app uses now' })
+      continue
+    }
+    const found = await emptyAccountFolders(roots, id)
+    if (found.why) {
+      results.push({ id, ok: false, reason: found.why })
+      continue
+    }
+    let bytes = 0
+    for (const f of found.folders) bytes += await sizeOf(f)
+    const failed = await removeAll(found.folders)
+    results.push(failed.length ? { id, ok: false, reason: `could not move ${failed.length} folder(s) to the ${TRASH_NAME}` } : { id, ok: true, freed: bytes })
+  }
+  progress(results.length, ids.length, 0)
+  out({ ok: true, recycled: !flag('permanent'), trash: TRASH_NAME, results })
+}
+
 // ---------- restore: give a chat the app deleted a sidebar entry again ----------
 
 // Settings taken from the target account's newest entry, so a restored chat opens like the
@@ -1134,8 +1197,9 @@ try {
   else if (cmd === 'move') await move(ids)
   else if (cmd === 'peek') await peek(ids[0] ?? '')
   else if (cmd === 'restore') await restore(ids)
+  else if (cmd === 'forget') await forget(ids)
   else if (cmd === 'diag') await diag()
-  else fail('usage: sessions.mjs scan|strip|delete|move|restore|peek|diag [--ids a,b] [--to account] [--exclude id] [--permanent]')
+  else fail('usage: sessions.mjs scan|strip|delete|move|restore|forget|peek|diag [--ids a,b] [--to account] [--exclude id] [--permanent]')
 } catch (err) {
   fail(String(err?.stack ?? err))
 }

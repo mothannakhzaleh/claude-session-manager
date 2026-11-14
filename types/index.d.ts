@@ -83,7 +83,7 @@ export type Peek = {
 }
 
 export type Pending = {
-  action: 'delete' | 'strip' | 'move' | 'restore'
+  action: 'delete' | 'strip' | 'move' | 'restore' | 'forget'
   ids: string[]
   label: string
   bytes: number

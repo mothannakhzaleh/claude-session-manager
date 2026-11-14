@@ -11,7 +11,7 @@
 ## Safety
 
 - [ ] Nothing new can delete or change skills, plugins, memory, settings or files outside session folders
-- [ ] Anything that deletes or rewrites files still asks first and uses the Recycle Bin
+- [ ] Anything that deletes or rewrites files still asks first and uses the Recycle Bin or Trash
 - [ ] No personal data (emails, account ids, private paths) in code, tests or screenshots
 
 Leave `version` in `.claude-plugin/plugin.json` as it is: the release workflow sets it.

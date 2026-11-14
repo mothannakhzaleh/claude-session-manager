@@ -6,8 +6,10 @@
 //   node sessions.mjs scan   [--exclude <id>]
 //   node sessions.mjs strip  --ids a,b [--exclude <id>] [--permanent]
 //   node sessions.mjs delete --ids a,b [--exclude <id>] [--permanent]
-//   --users-root <dir>   folder holding Windows user profiles (default C:\Users; tests use a fixture)
-//   --cache <file>       scan cache (default <profile>\.claude\cache\session-manager-scan.json)
+//   --users-root <dir>   folder holding user profiles (default: the folder above your home, such as
+//                        C:\Users, /Users or /home; tests use a fixture)
+//   --cache <file>       scan cache (default <home>/.claude/cache/session-manager-scan.json)
+// Runs on Windows, macOS and Linux. Removed files go to the Recycle Bin or Trash.
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
@@ -35,6 +37,11 @@ const flag = name => args.includes(`--${name}`)
 const exclude = new Set((opt('exclude') ?? '').split(',').filter(Boolean))
 const usersRoot = opt('users-root') ?? path.dirname(os.homedir())
 const selfProfile = opt('users-root') ? undefined : os.homedir()
+
+const PLATFORM = process.platform
+// Windows and macOS compare paths without case; Linux paths are case-sensitive.
+const fold = p => (PLATFORM === 'win32' || PLATFORM === 'darwin' ? p.toLowerCase() : p)
+const TRASH_NAME = PLATFORM === 'win32' ? 'Recycle Bin' : 'Trash'
 
 const out = value => process.stdout.write(JSON.stringify(value))
 // One line per step on stderr, read by the mod for its progress bar: @@progress {"done":3,"total":9,"bytes":1234}
@@ -84,7 +91,7 @@ async function sizeOf(p) {
   return total
 }
 
-// Every Windows profile whose .claude folder this process can read.
+// Every user profile whose .claude folder this process can read.
 async function profiles() {
   const found = []
   for (const name of await dirs(usersRoot)) {
@@ -128,14 +135,33 @@ async function signedInAccount(home) {
   }
 }
 
-// The desktop app's per-account session index: Claude-Data\<install>\claude-code-sessions\<account>\<org>.
+// The desktop app's data folders under a home, each of which may hold claude-code-sessions:
+//   Windows  AppData\Local\Claude-Data\<install>   (older builds: AppData\Roaming\Claude)
+//   macOS    Library/Application Support/Claude
+//   Linux    .config/Claude   (no official app; community builds use this)
+async function appRoots(home) {
+  const roots = []
+  const installs = async base => (await dirs(base)).map(d => path.join(base, d))
+  if (PLATFORM === 'win32') {
+    roots.push(...(await installs(path.join(home, 'AppData', 'Local', 'Claude-Data'))), path.join(home, 'AppData', 'Roaming', 'Claude'))
+  } else if (PLATFORM === 'darwin') {
+    const support = path.join(home, 'Library', 'Application Support')
+    roots.push(path.join(support, 'Claude'), ...(await installs(path.join(support, 'Claude-Data'))))
+  } else {
+    roots.push(path.join(home, '.config', 'Claude'))
+  }
+  const found = []
+  for (const r of roots) if (await exists(path.join(r, 'claude-code-sessions'))) found.push(r)
+  return found
+}
+
+// The desktop app's per-account session index: <app root>/claude-code-sessions/<account>/<org>.
 // Read only. local_<id>.json names the transcript (cliSessionId); deleted_<id> marks one the app deleted.
 async function desktopIndex(home) {
   const index = new Map()
   const accounts = new Map()
-  const base = path.join(home, 'AppData', 'Local', 'Claude-Data')
-  for (const install of await dirs(base)) {
-    const root = path.join(base, install, 'claude-code-sessions')
+  for (const appRoot of await appRoots(home)) {
+    const root = path.join(appRoot, 'claude-code-sessions')
     for (const account of await dirs(root)) {
       if (!UUID.test(account)) continue
       for (const org of await dirs(path.join(root, account))) {
@@ -414,7 +440,7 @@ async function scan() {
   } catch {}
 
   sessions.sort((a, b) => b.mtimeMs - a.mtimeMs)
-  out({ ok: true, scannedAt: new Date().toISOString(), tookMs: Date.now() - started, parsed, users: profs.map(p => p.user), accounts, total, models, sessions })
+  out({ ok: true, platform: PLATFORM, trash: TRASH_NAME, scannedAt: new Date().toISOString(), tookMs: Date.now() - started, parsed, users: profs.map(p => p.user), accounts, total, models, sessions })
 }
 
 // ---------- targets and removal ----------
@@ -450,10 +476,10 @@ async function targetsOf(id) {
       for (const p of [path.join(projectsDir, project, id), path.join(prof.claude, 'file-history', id), path.join(prof.claude, 'session-env', id)]) {
         if (await exists(p)) list.push(p)
       }
-      const rootReal = (await fsp.realpath(prof.claude)).toLowerCase()
+      const rootReal = fold(await fsp.realpath(prof.claude))
       for (const p of list) {
         const real = await fsp.realpath(p)
-        if (!real.toLowerCase().startsWith(rootReal + path.sep)) return undefined
+        if (!fold(real).startsWith(rootReal + path.sep)) return undefined
         if (!sessionShape(real.slice(rootReal.length + 1), id)) return undefined
         if ((await fsp.lstat(p)).isSymbolicLink()) return undefined
       }
@@ -474,9 +500,16 @@ function refusal(t) {
   return undefined
 }
 
-// Moves paths to the Recycle Bin in one PowerShell call; answers the paths it could not move.
+// Moves paths to the Recycle Bin (Windows) or the Trash (macOS, Linux); answers the paths it could not move.
 function recycle(paths) {
   if (paths.length === 0) return []
+  if (PLATFORM === 'win32') return recycleWindows(paths)
+  if (PLATFORM === 'darwin') return trashMac(paths)
+  return trashFreedesktop(paths)
+}
+
+// One PowerShell call for all paths.
+function recycleWindows(paths) {
   const script = [
     'Add-Type -AssemblyName Microsoft.VisualBasic',
     '$failed = @()',
@@ -497,6 +530,63 @@ function recycle(paths) {
     return r.stdout.split(/\r?\n/).filter(Boolean)
   }
   return paths
+}
+
+// A name not yet taken in a trash folder: "name", then "name 2", "name 3", ...
+function freeName(dir, base, taken = name => fs.existsSync(path.join(dir, name))) {
+  const ext = path.extname(base)
+  const stem = ext && ext !== base ? base.slice(0, -ext.length) : base
+  for (let n = 1; ; n++) {
+    const name = n === 1 ? base : `${stem} ${n}${ext}`
+    if (!taken(name)) return name
+  }
+}
+
+// macOS: the system `trash` command (macOS 14 and newer) keeps Finder's "Put Back"; older
+// systems get a plain move into ~/.Trash.
+function trashMac(paths) {
+  const r = spawnSync('/usr/bin/trash', paths, { encoding: 'utf8' })
+  if (!r.error) return paths.filter(p => fs.existsSync(p))
+  const dir = path.join(os.homedir(), '.Trash')
+  const failed = []
+  for (const p of paths) {
+    try {
+      fs.mkdirSync(dir, { recursive: true })
+      fs.renameSync(p, path.join(dir, freeName(dir, path.basename(p))))
+    } catch (err) {
+      if (err?.code !== 'ENOENT') failed.push(p)
+    }
+  }
+  return failed
+}
+
+// Linux: the freedesktop.org Trash in $XDG_DATA_HOME/Trash (~/.local/share/Trash), which file
+// managers list and restore from: the item goes to files/, a .trashinfo note to info/.
+function trashFreedesktop(paths) {
+  const dataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share')
+  const filesDir = path.join(dataHome, 'Trash', 'files')
+  const infoDir = path.join(dataHome, 'Trash', 'info')
+  const failed = []
+  const pad = n => String(n).padStart(2, '0')
+  for (const p of paths) {
+    if (!fs.existsSync(p)) continue
+    let info
+    try {
+      fs.mkdirSync(filesDir, { recursive: true, mode: 0o700 })
+      fs.mkdirSync(infoDir, { recursive: true, mode: 0o700 })
+      const name = freeName(filesDir, path.basename(p), n => fs.existsSync(path.join(filesDir, n)) || fs.existsSync(path.join(infoDir, `${n}.trashinfo`)))
+      const d = new Date()
+      const when = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+      const encoded = path.resolve(p).split('/').map(encodeURIComponent).join('/')
+      info = path.join(infoDir, `${name}.trashinfo`)
+      fs.writeFileSync(info, `[Trash Info]\nPath=${encoded}\nDeletionDate=${when}\n`, { flag: 'wx' })
+      fs.renameSync(p, path.join(filesDir, name))
+    } catch {
+      if (info) fs.rmSync(info, { force: true })
+      failed.push(p) // another disk (EXDEV) or no permission: the file stays where it was
+    }
+  }
+  return failed
 }
 
 async function removeAll(paths) {
@@ -602,17 +692,17 @@ async function strip(ids) {
       freed += orig.size - after
       blocks += removed
     }
-    // The originals go to the Recycle Bin together (or are deleted with --permanent).
+    // The originals go to the Recycle Bin or Trash together (or are deleted with --permanent).
     const left = await removeAll(setAside)
     if (left.length && !error) error = `stripped, but ${left.length} original(s) stay beside it as .sm-orig`
     results.push(error ? { id, ok: false, reason: error, freed, blocks } : { id, ok: true, freed, blocks })
     freedAll += freed
   }
   progress(results.length, ids.length, freedAll)
-  out({ ok: true, recycled: !flag('permanent'), results })
+  out({ ok: true, recycled: !flag('permanent'), trash: TRASH_NAME, results })
 }
 
-const CHUNK = 20 // sessions per Recycle Bin call: one PowerShell start per chunk, a progress step after each
+const CHUNK = 20 // sessions per trash call (one PowerShell start per chunk on Windows), a progress step after each
 
 async function del(ids) {
   const results = []
@@ -652,7 +742,7 @@ async function del(ids) {
     done += chunk.length
     progress(done, ids.length, freed)
   }
-  out({ ok: true, recycled: !flag('permanent'), results })
+  out({ ok: true, recycled: !flag('permanent'), trash: TRASH_NAME, results })
 }
 
 // ---------- move a chat's sidebar entry to another account ----------
@@ -660,15 +750,15 @@ async function del(ids) {
 const ARCHIVE_IDX = 'archived-sessions.idx'
 const LOCAL_NAME = /^local_[0-9a-f-]{36}\.json$/i
 
-// An app index path must be Claude-Data\<install>\claude-code-sessions\<account>\<org>[\local_<id>.json].
-function appShape(home, p, withFile) {
-  const base = path.join(home, 'AppData', 'Local', 'Claude-Data')
-  if (!p.toLowerCase().startsWith(base.toLowerCase() + path.sep)) return false
+// An app index path must be <app root>/claude-code-sessions/<account>/<org>[/local_<id>.json],
+// the app root one of appRoots(home).
+function appShape(roots, p, withFile) {
+  const base = roots.find(r => fold(p).startsWith(fold(r) + path.sep))
+  if (!base) return false
   const parts = p.slice(base.length + 1).split(/[\\/]/)
-  const [install, top, account, org, file] = parts
+  const [top, account, org, file] = parts
   return (
-    parts.length === (withFile ? 5 : 4) &&
-    Boolean(install) &&
+    parts.length === (withFile ? 4 : 3) &&
     top === 'claude-code-sessions' &&
     UUID.test(account ?? '') &&
     UUID.test(org ?? '') &&
@@ -694,9 +784,10 @@ async function move(ids) {
   const prof = (await once('profiles', profiles)).find(p => !selfProfile || p.home === selfProfile) ?? (await profiles())[0]
   if (!prof) fail('no profile')
   const { index, accounts } = await desktopIndex(prof.home)
+  const roots = await appRoots(prof.home)
   const newest = [...accounts.values()].sort((a, b) => b.lastWriteMs - a.lastWriteMs)[0]
   const target = accounts.get(opt('to') ?? '') ?? newest
-  if (!target || !appShape(prof.home, target.folder, false)) fail('no Claude app account folder to move into')
+  if (!target || !appShape(roots, target.folder, false)) fail('no Claude app account folder to move into')
   const results = []
   progress(0, ids.length, 0)
   for (const id of ids) {
@@ -705,7 +796,7 @@ async function move(ids) {
     const t = await targetsOf(id)
     let why = !e?.localFile ? 'has no entry in the app sidebar' : e.account === target.accountUuid ? 'already in this account' : refusal(t)
     const dest = e?.localFile ? path.join(target.folder, path.basename(e.localFile)) : ''
-    if (!why && (!appShape(prof.home, e.localFile, true) || !appShape(prof.home, dest, true))) why = 'unexpected app folder layout'
+    if (!why && (!appShape(roots, e.localFile, true) || !appShape(roots, dest, true))) why = 'unexpected app folder layout'
     if (!why && (await exists(dest))) why = 'an entry with this id is already in the target account'
     if (why) {
       results.push({ id, ok: false, reason: why })
@@ -750,7 +841,7 @@ async function move(ids) {
     }
   }
   progress(results.length, ids.length, 0)
-  out({ ok: true, to: target.accountUuid, recycled: !flag('permanent'), results })
+  out({ ok: true, to: target.accountUuid, recycled: !flag('permanent'), trash: TRASH_NAME, results })
 }
 
 // ---------- restore: give a chat the app deleted a sidebar entry again ----------
@@ -793,9 +884,10 @@ async function restore(ids) {
   const prof = (await once('profiles', profiles)).find(p => !selfProfile || p.home === selfProfile) ?? (await profiles())[0]
   if (!prof) fail('no profile')
   const { index, accounts } = await desktopIndex(prof.home)
+  const roots = await appRoots(prof.home)
   const newest = [...accounts.values()].sort((a, b) => b.lastWriteMs - a.lastWriteMs)[0]
   const target = accounts.get(opt('to') ?? '') ?? newest
-  if (!target || !appShape(prof.home, target.folder, false)) fail('no Claude app account folder to restore into')
+  if (!target || !appShape(roots, target.folder, false)) fail('no Claude app account folder to restore into')
   const template = await newestEntry(target.folder)
   const sessionsRoot = path.dirname(path.dirname(target.folder)) // ...\claude-code-sessions
   const results = []
@@ -806,7 +898,7 @@ async function restore(ids) {
     const t = await targetsOf(id)
     let why = e?.state !== 'deleted-in-app' ? (e?.localFile ? 'already in the app sidebar' : 'the app never listed it') : refusal(t)
     const dest = path.join(target.folder, `local_${id}.json`)
-    if (!why && !appShape(prof.home, dest, true)) why = 'unexpected app folder layout'
+    if (!why && !appShape(roots, dest, true)) why = 'unexpected app folder layout'
     if (!why && (await exists(dest))) why = 'an entry with this id is already there'
     let info
     if (!why) {
@@ -868,7 +960,7 @@ async function restore(ids) {
     }
   }
   progress(results.length, ids.length, 0)
-  out({ ok: true, to: target.accountUuid, recycled: !flag('permanent'), results })
+  out({ ok: true, to: target.accountUuid, recycled: !flag('permanent'), trash: TRASH_NAME, results })
 }
 
 // ---------- peek: what is inside one session ----------

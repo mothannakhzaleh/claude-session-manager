@@ -18,5 +18,5 @@ You will get an answer within a week. Once a fix is released, the advisory is pu
 ## What counts
 
 - Deleting, changing or reading files outside the session folders (skills, plugins, memory, settings, anything else)
-- Reading credentials or sending any data off your PC
+- Reading credentials or sending any data off your computer
 - Running anything without the person pressing a button for it

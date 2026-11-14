@@ -275,7 +275,9 @@ function summaryText(scan: ScanResult | null): string {
   ]
   for (const a of scan.accounts) {
     const rows = scan.sessions.filter(s => s.account === a.accountUuid)
-    lines.push(`- ${a.label}${a.isSignedIn ? ' (signed in)' : ''}: ${rows.length} session(s), out ${num(sum(rows).output)} tokens`)
+    if (!rows.length) continue // an account with no sessions left adds nothing
+    const tags = `${a.isAppActive ? ' · this app' : ''}${a.isSignedIn ? ' · terminal login' : ''}`
+    lines.push(`- ${a.label}${tags}: ${rows.length} session(s), out ${num(sum(rows).output)} tokens`)
   }
   const none = chats.filter(s => !s.account)
   lines.push(`- conversations in no app list: ${none.length}, out ${num(sum(none).output)} tokens`)
@@ -307,14 +309,16 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'sessions' }, async $ => {
-    const { isPlaced } = await $.ui.open({ id: PANE, title: TITLE })
+    const opened = await $.ui.open({ id: PANE, title: TITLE })
     let scan = await read($, scanAtom)
     if (!scan) {
       // First run: wait for the numbers so the command's answer holds them.
       await runScan($)
       scan = await read($, scanAtom)
     } else if (Date.now() - Date.parse(scan.scannedAt) > 10 * 60_000) void runScan($)
-    const head = isPlaced ? 'Sessions pane opened.' : 'The Sessions pane cannot be shown here; summary:'
+    const head = opened.isPlaced
+      ? 'Sessions pane opened.'
+      : `The Sessions pane is not shown yet (${opened.reason ?? 'no surface to draw it'}); run /sessions again in a moment, or start a new session. Summary:`
     return { text: `${head}\n${summaryText(scan)}` }
   })
 

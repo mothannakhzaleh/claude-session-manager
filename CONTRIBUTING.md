@@ -49,7 +49,9 @@ The helper also runs on its own, for example `node scripts/sessions.mjs scan`. I
 
 ## Releases
 
-Do not change `version` in `.claude-plugin/plugin.json`. Every merge to `main` that changes the mod is released by the [Release workflow](.github/workflows/release.yml): it raises the version, tags it and publishes a GitHub Release. For a bigger release the maintainer may set the version by hand (for example `0.4.0`), and the workflow keeps it.
+Changes reach `main` only through pull requests whose checks all pass (Linux, macOS and Windows), and the maintainer may let a pull request merge itself once they do.
+
+Do not add a `version` to `.claude-plugin/plugin.json` or `marketplace.json`: without one, Claude Code takes the commit as the version, so every merge to `main` reaches people's auto-update. Every merge that changes the mod is also tagged and published as a GitHub Release by the [Release workflow](.github/workflows/release.yml), numbered patch + 1. For a bigger number, the maintainer puts a line `Release-As: 0.5.0` in the merged commit's message.
 
 ## License
 

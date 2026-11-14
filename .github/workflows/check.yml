@@ -33,7 +33,7 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Scripts parse
-        run: node --check scripts/sessions.mjs && node --check .github/scripts/bump-version.mjs
+        run: node --check scripts/sessions.mjs && node --check .github/scripts/release-version.mjs
 
       - name: Scan, peek, clear, delete to the bin, move and restore
         run: node --test tests/helper-cross-platform.mjs
@@ -57,10 +57,13 @@ jobs:
             const m = read(".claude-plugin/marketplace.json")
             const h = read("hooks/hooks.json")
             if (p.name !== "session-manager") throw new Error("plugin.json name changed")
-            if (!/^\d+\.\d+\.\d+$/.test(p.version)) throw new Error("plugin.json version is not x.y.z")
-            if (!m.plugins?.some(x => x.name === p.name)) throw new Error("marketplace.json does not list the plugin")
+            // No version anywhere: Claude Code then takes the commit as the version, so every
+            // merge to main reaches people'"'"'s auto-update without a version commit.
+            const entry = m.plugins?.find(x => x.name === p.name)
+            if (!entry) throw new Error("marketplace.json does not list the plugin")
+            if ("version" in p || "version" in entry) throw new Error("leave version out of plugin.json and marketplace.json")
             for (const mod of h.modules ?? []) if (!fs.existsSync("hooks/" + mod)) throw new Error("missing hooks module " + mod)
-            console.log("manifests ok,", p.name, p.version)
+            console.log("manifests ok,", p.name)
           '
 
       - name: Install Claude Code

@@ -80,7 +80,7 @@ Then start a new session and type `/sessions` to open the pane.
 
 ## Updating
 
-Every change pushed to this repository is released as a new version automatically: a GitHub Action raises the version number, tags it and publishes a [Release](https://github.com/mothannakhzaleh/claude-session-manager/releases) with the changes.
+Every change merged into this repository is a new version for Claude Code, after its checks pass on Linux, macOS and Windows. Changes to the mod are also published as a numbered [Release](https://github.com/mothannakhzaleh/claude-session-manager/releases) listing what changed.
 
 **Get updates without doing anything (recommended, once):** in Claude Code, type `/plugin`, open **Marketplaces**, select **claude-session-manager** and choose **Enable auto-update**. Marketplaces other than Anthropic's start with auto-update off, so this one step is needed. After that, Claude Code checks for new versions in the background after your first message in a session, and loads them the next time it starts (or right away with `/reload-plugins`).
 

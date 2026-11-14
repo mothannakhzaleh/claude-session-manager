@@ -5,7 +5,7 @@
     {
       "name": "session-manager",
       "source": "./",
-      "description": "See every Claude Code session on your PC by account, with token totals; clear uploads, delete old sessions and leftover logs, view what is inside a chat, and move chats between accounts"
+      "description": "See every Claude Code session on your PC by account, with token totals; clear uploads, delete old sessions and leftover logs, view what is inside a chat, move chats between accounts and restore deleted chats to the sidebar"
     }
   ]
 }

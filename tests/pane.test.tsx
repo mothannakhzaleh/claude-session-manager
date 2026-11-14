@@ -42,7 +42,7 @@ const SCAN: ScanResult = {
   total: { input: 10, output: 4500, cacheWrite: 100, cacheRead: 9000, messages: 9 },
   models: {},
   sessions: [
-    row('11111111-1111-4111-8111-111111111111', { canStrip: true, uploads: { count: 3, bytes: 900_000 } }),
+    row('11111111-1111-4111-8111-111111111111', { state: 'deleted-in-app', canRestore: true, canStrip: true, uploads: { count: 3, bytes: 900_000 } }),
     row('22222222-2222-4222-8222-222222222222', { state: 'in-app', account: ACC, canDelete: false, canMove: true, mtimeMs: Date.now() - DAY }),
     row('33333333-3333-4333-8333-333333333333', { isCurrent: true, isLive: true, canDelete: false, mtimeMs: Date.now() }),
     row('44444444-4444-4444-8444-444444444444', { kind: 'log', replies: 0, title: 'Below is a conversation log', tokens: { ...zero } }),
@@ -80,6 +80,13 @@ test('the pane lists sessions and asks before deleting, on every surface', async
     // The confirmation names what it deletes and where it goes.
     expect((await ui.find({ type: 'Text', text: /^• Session 1111 · / }))?.text).toContain('2.0 MB')
     expect(await ui.find({ type: 'Text', text: /Recycle Bin, where you can restore them/ })).toBeDefined()
+    await ui.press({ key: 'cancel' })
+
+    // A chat deleted in the app with its conversation kept can come back to the sidebar.
+    expect(await ui.find({ key: 'restore-22222222-2222-4222-8222-222222222222' })).toBeUndefined()
+    await ui.press({ key: 'restore-11111111-1111-4111-8111-111111111111' })
+    expect(await ui.find({ type: 'Text', text: /^Restore "Session 1111" to the sidebar\?$/ })).toBeDefined()
+    expect((await ui.find({ key: 'confirm' }))?.text).toBe('Yes, restore')
     await ui.press({ key: 'cancel' })
     expect(await ui.find({ key: 'confirm' })).toBeUndefined()
 

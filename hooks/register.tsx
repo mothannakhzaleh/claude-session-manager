@@ -35,6 +35,7 @@ const LABEL: Record<Pending['action'], [string, string]> = {
   delete: ['Deleting', 'session(s)'],
   strip: ['Clearing uploads in', 'session(s)'],
   move: ['Moving', 'chat(s) to this account'],
+  restore: ['Restoring', 'chat(s) to the sidebar'],
 }
 
 // ---------- formatting ----------
@@ -236,7 +237,9 @@ async function runAction($: EngineInterface, p: Pending) {
         ? `Deleted ${done.length} session(s), ${mb(bytes)}${where}`
         : p.action === 'strip'
           ? `Cleared uploads in ${done.length} session(s), ${mb(bytes)} smaller${where}`
-          : `Moved ${done.length} chat(s) to this account. Restart the Claude app to see them in the sidebar.`
+          : p.action === 'restore'
+            ? `Restored ${done.length} chat(s) to the sidebar. Restart the Claude app to see them.`
+            : `Moved ${done.length} chat(s) to this account. Restart the Claude app to see them in the sidebar.`
     if (gone) note += ` · ${gone} were already gone`
     if (refused.length) note += ` · skipped ${refused.length}: ${cut(refused[0]?.reason ?? '', 80)}`
   } catch (err) {
@@ -723,7 +726,9 @@ export const register: Register = on => {
               {pending.ids.length > 5 ? <Text dimColor>{`…and ${pending.ids.length - 5} more`}</Text> : null}
             </Box>
             <Text>
-              {pending.action === 'move'
+              {pending.action === 'restore'
+                ? 'Gives each chat a new entry in this app’s sidebar (Active list) so you can continue it, and moves the app’s “deleted” mark to the Recycle Bin. The conversation is not changed. Restart the Claude app afterwards.'
+                : pending.action === 'move'
                 ? 'Each chat leaves its old account’s sidebar and joins this one. Restart the Claude app afterwards. Chats open now or used in the last 15 minutes are skipped.'
                 : pending.action === 'delete'
                   ? `About ${mb(pending.bytes)}. The transcript and its side files go to the Recycle Bin, where you can restore them. Sessions open now, used in the last 15 minutes or still in the app list are skipped.`
@@ -732,7 +737,7 @@ export const register: Register = on => {
             {pending.isQueued ? <Text color="warning">Waiting for the scan to finish, then it starts by itself…</Text> : null}
             <Box flexDirection="row" columnGap={1}>
               <Button key="confirm" variant="primary" onPress={() => void runAction($, pending)}>
-                {pending.isQueued ? 'Starting after the scan…' : pending.action === 'delete' ? 'Yes, delete' : pending.action === 'strip' ? 'Yes, clear' : 'Yes, move'}
+                {pending.isQueued ? 'Starting after the scan…' : pending.action === 'delete' ? 'Yes, delete' : pending.action === 'strip' ? 'Yes, clear' : pending.action === 'restore' ? 'Yes, restore' : 'Yes, move'}
               </Button>
               <Button key="cancel" onPress={() => void update($, pendingAtom, () => null)}>
                 Cancel
@@ -823,6 +828,15 @@ export const register: Register = on => {
                         onPress={() => void ask({ action: 'move', ids: [s.id], label: `Move "${cut(s.title, 40)}" to this account`, bytes: 0 })}
                       >
                         Move here
+                      </Button>
+                    )}
+                    {s.canRestore && !isWorking && (
+                      <Button
+                        key={`restore-${s.id}`}
+                        dimColor
+                        onPress={() => void ask({ action: 'restore', ids: [s.id], label: `Restore "${cut(s.title, 40)}" to the sidebar`, bytes: 0 })}
+                      >
+                        Restore to sidebar
                       </Button>
                     )}
                     {s.canStrip && (

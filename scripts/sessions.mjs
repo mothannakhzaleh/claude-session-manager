@@ -365,6 +365,8 @@ async function scan() {
           canStrip: !isLive && info.uploads.count > 0,
           // Has a sidebar entry in the app that can move to another account.
           canMove: !isLive && (state === 'in-app' || state === 'archived'),
+          // Deleted in the app with the conversation still here: its sidebar entry can be rebuilt.
+          canRestore: !isLive && state === 'deleted-in-app' && Boolean(info.cwd),
           first: info.first,
           last: info.last ?? new Date(st.mtimeMs).toISOString(),
           mtimeMs: st.mtimeMs,
@@ -751,6 +753,124 @@ async function move(ids) {
   out({ ok: true, to: target.accountUuid, recycled: !flag('permanent'), results })
 }
 
+// ---------- restore: give a chat the app deleted a sidebar entry again ----------
+
+// Settings taken from the target account's newest entry, so a restored chat opens like the
+// others there. Nothing tied to another conversation (titles, forks, summaries, git trust).
+const RESTORE_COPY = [
+  'model',
+  'effort',
+  'permissionMode',
+  'remoteMcpServersConfig',
+  'chromePermissionMode',
+  'classifierSummaryEnabled',
+  'reportFindingsCard',
+  'autoModeServerFallbackPrompt',
+  'remoteControlAutoEligible',
+]
+
+async function newestEntry(folder) {
+  let best
+  let bestMs = 0
+  for (const name of await files(folder)) {
+    if (!LOCAL_NAME.test(name)) continue
+    const st = await fsp.stat(path.join(folder, name)).catch(() => undefined)
+    if (st && st.mtimeMs > bestMs) {
+      bestMs = st.mtimeMs
+      best = path.join(folder, name)
+    }
+  }
+  if (!best) return {}
+  try {
+    const o = JSON.parse(await fsp.readFile(best, 'utf8'))
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : {}
+  } catch {
+    return {}
+  }
+}
+
+async function restore(ids) {
+  const prof = (await once('profiles', profiles)).find(p => !selfProfile || p.home === selfProfile) ?? (await profiles())[0]
+  if (!prof) fail('no profile')
+  const { index, accounts } = await desktopIndex(prof.home)
+  const newest = [...accounts.values()].sort((a, b) => b.lastWriteMs - a.lastWriteMs)[0]
+  const target = accounts.get(opt('to') ?? '') ?? newest
+  if (!target || !appShape(prof.home, target.folder, false)) fail('no Claude app account folder to restore into')
+  const template = await newestEntry(target.folder)
+  const sessionsRoot = path.dirname(path.dirname(target.folder)) // ...\claude-code-sessions
+  const results = []
+  progress(0, ids.length, 0)
+  for (const id of ids) {
+    if (results.length) progress(results.length, ids.length, 0)
+    const e = index.get(id)
+    const t = await targetsOf(id)
+    let why = e?.state !== 'deleted-in-app' ? (e?.localFile ? 'already in the app sidebar' : 'the app never listed it') : refusal(t)
+    const dest = path.join(target.folder, `local_${id}.json`)
+    if (!why && !appShape(prof.home, dest, true)) why = 'unexpected app folder layout'
+    if (!why && (await exists(dest))) why = 'an entry with this id is already there'
+    let info
+    if (!why) {
+      info = await readTranscript(t.file, id)
+      if (!info.cwd) why = 'the transcript records no working folder'
+    }
+    if (why) {
+      results.push({ id, ok: false, reason: why })
+      continue
+    }
+    const firstMs = Date.parse(info.first ?? '') || t.st.mtimeMs
+    const lastMs = Date.parse(info.last ?? '') || t.st.mtimeMs
+    const model = [...info.msgs].reverse().find(m => /^claude-/.test(m[6]))?.[6]
+    const kept = Object.fromEntries(RESTORE_COPY.filter(k => k in template).map(k => [k, template[k]]))
+    const entry = {
+      ...kept,
+      sessionId: `local_${id}`,
+      cliSessionId: id,
+      cwd: info.cwd,
+      originCwd: info.cwd,
+      gitAnchors: [],
+      gitAnchorsLookupOnly: true,
+      lastFocusedAt: lastMs,
+      createdAt: firstMs,
+      lastActivityAt: lastMs,
+      indexedAt: Date.now(),
+      ...(model ? { model } : {}),
+      isArchived: false,
+      title: (info.title ?? info.firstPrompt ?? 'Restored chat').slice(0, 200),
+      titleSource: 'auto',
+      interruptedAwaitingPerson: null,
+      lastSpawnRootDetected: false,
+      autoChosenInApp: true,
+      startedFromEnvironmentId: null,
+      steeredByRemoteClient: null,
+      alwaysAllowedReasons: [],
+      sessionPermissionUpdates: [],
+      turnBoxDeclared: true,
+      turnBoxMounted: true,
+      spawnSeed: {},
+    }
+    // The app's "deleted" markers for this chat, in every account folder of this install.
+    const markers = []
+    for (const account of await dirs(sessionsRoot)) {
+      if (!UUID.test(account)) continue
+      for (const org of await dirs(path.join(sessionsRoot, account))) {
+        const m = path.join(sessionsRoot, account, org, `deleted_${id}`)
+        if (UUID.test(org) && (await exists(m))) markers.push(m)
+      }
+    }
+    try {
+      await fsp.writeFile(dest, JSON.stringify(entry), { flag: 'wx' })
+      const failed = await removeAll(markers)
+      if (failed.length) throw new Error('could not remove the app’s deleted marker')
+      results.push({ id, ok: true, to: target.accountUuid, title: entry.title })
+    } catch (err) {
+      await fsp.rm(dest, { force: true }).catch(() => undefined)
+      results.push({ id, ok: false, reason: String(err?.message ?? err) })
+    }
+  }
+  progress(results.length, ids.length, 0)
+  out({ ok: true, to: target.accountUuid, recycled: !flag('permanent'), results })
+}
+
 // ---------- peek: what is inside one session ----------
 
 async function peek(id) {
@@ -828,7 +948,8 @@ try {
   else if (cmd === 'delete') await del(ids)
   else if (cmd === 'move') await move(ids)
   else if (cmd === 'peek') await peek(ids[0] ?? '')
-  else fail('usage: sessions.mjs scan|strip|delete|move|peek [--ids a,b] [--to account] [--exclude id] [--permanent]')
+  else if (cmd === 'restore') await restore(ids)
+  else fail('usage: sessions.mjs scan|strip|delete|move|restore|peek [--ids a,b] [--to account] [--exclude id] [--permanent]')
 } catch (err) {
   fail(String(err?.stack ?? err))
 }

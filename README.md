@@ -14,6 +14,7 @@ See every Claude Code session on your PC, for every Claude account, in one pane:
 - **Progress bar.** Shows what is done, what is left and how much space has been freed so far.
 - **View what is inside a chat.** When it ran, model, branch, what you asked, Claude's last replies, the tools it used and the files it worked on, without opening the chat.
 - **Bring chats from another account.** Moves a chat's sidebar entry into the account the Claude app uses now, so you can continue it there. It lands in your Active list. The conversation itself stays where it is, so nothing is duplicated or left behind.
+- **Restore deleted chats to the sidebar.** A chat you deleted in the app often still has its conversation on disk ("Deleted in app, files left"). **Restore to sidebar** gives it a new entry in your Active list so you can continue it. The conversation is not changed.
 - **Small widget.** In the Claude desktop app a small Sessions widget opens beside the chat with the main numbers. Turn it off from the pane footer.
 
 ![Cleanup: the Uploads card with its own Clear all button, and the progress bar while it runs](docs/images/cleanup.png)

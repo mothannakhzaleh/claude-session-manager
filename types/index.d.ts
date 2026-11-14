@@ -15,6 +15,7 @@ export type SessionRow = {
   canDelete: boolean
   canStrip: boolean
   canMove?: boolean // has an app sidebar entry that can move to another account
+  canRestore?: boolean // deleted in the app, conversation kept: the sidebar entry can be rebuilt
   first?: string
   last: string
   mtimeMs: number
@@ -81,7 +82,7 @@ export type Peek = {
 }
 
 export type Pending = {
-  action: 'delete' | 'strip' | 'move'
+  action: 'delete' | 'strip' | 'move' | 'restore'
   ids: string[]
   label: string
   bytes: number

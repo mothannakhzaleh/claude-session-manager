@@ -45,7 +45,7 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
 
 **What it sends:** nothing. The mod and its helper make no network requests and send no data anywhere. The one time anything is downloaded is when you press **Install Node.js**: winget or Homebrew then downloads Node.js from its own official source.
 
-When Claude opens the pane for you (the `sessions` skill and its `open_sessions` tool), the tool answers Claude with a short summary that becomes part of the chat: session and log counts, disk use, token totals, and per account a number ("account 1 · this app"), its session count and output tokens. It holds no email, account id, organization, chat title or conversation text.
+When Claude opens the pane for you (the `manage-sessions` skill and its `open_sessions` tool), the tool answers Claude with a short summary that becomes part of the chat: session and log counts, disk use, token totals, and per account a number ("account 1 · this app"), its session count and output tokens. It holds no email, account id, organization, chat title or conversation text.
 
 **What it reads, all on your computer:**
 
@@ -101,7 +101,7 @@ Then start a new session and type `/sessions` to open the pane.
 ## Use
 
 - `/sessions` opens the pane. The first scan reads every transcript once (about 20 seconds on a large history). After that, only changed files are read again.
-- In the Claude desktop app you can also pick it from **+ → Plugins → Session Manager**, or just ask Claude to "show my sessions": the plugin's `sessions` skill opens the same pane. It never deletes anything itself; all cleanup stays in the pane and asks you first.
+- In the Claude desktop app you can also pick it from **+ → Plugins → Session Manager**, or just ask Claude to "show my sessions": the plugin's `manage-sessions` skill opens the same pane. It never deletes anything itself; all cleanup stays in the pane and asks you first.
 - In the desktop app a small Sessions widget opens beside the chat when you start a new session (where your app version has widgets). Turn it off with **Widget at start** in the pane footer.
 - Click a tile's **Clean up** or **Bring here** to open its card.
 - **View** on any session shows what is inside it.

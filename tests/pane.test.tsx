@@ -164,6 +164,23 @@ test('the pane lists sessions and asks before deleting, on every surface', async
   await widget.unmount()
 })
 
+test('a refused /sessions command does not stop the tool from registering', async ($, on) => {
+  on('command.register', () => {
+    throw new Error('"/sessions" refused: it is the plugin\'s /session-manager:sessions')
+  })
+  // What reaches the engine's tool registry (answering a call alone would not show it).
+  const registered: string[] = []
+  on('tool.register', (_, e) => {
+    registered.push(e.name)
+    return { value: { tool: `mcp__session-manager__${e.name}` } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('store.get', () => ({ value: SCAN }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(registered).toContain('open_sessions')
+})
+
 test('without Node.js the pane offers to install it', async ($, on) => {
   on('command.register', () => ({ value: { command: 'sessions' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))

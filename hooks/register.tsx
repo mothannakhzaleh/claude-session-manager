@@ -146,6 +146,9 @@ async function runScan($: EngineInterface) {
   } finally {
     await update($, busyAtom, () => '')
   }
+  // An action confirmed while this scan ran starts now (Cancel clears it first).
+  const queued = await read($, pendingAtom)
+  if (queued?.isQueued) void runAction($, { ...queued, isQueued: false })
 }
 
 // Opens the View card for one session and fills it from the helper's `peek`.
@@ -207,17 +210,9 @@ async function runAction($: EngineInterface, p: Pending) {
     return
   }
   if (await read($, busyAtom)) {
-    // A scan is running: keep the confirmed action and start it when the scan ends.
+    // A scan is running: keep the confirmed action; runScan starts it when the scan ends.
     await update($, pendingAtom, () => ({ ...p, isQueued: true }))
-    const deadline = Date.now() + 5 * 60_000
-    while ((await read($, busyAtom)) && Date.now() < deadline) await $.clock.sleep(400)
-    const still = await read($, pendingAtom)
-    if (!still?.isQueued || still.ids.join() !== p.ids.join()) return // cancelled meanwhile
-    if (await read($, busyAtom)) {
-      await update($, pendingAtom, () => ({ ...p, isQueued: false }))
-      await update($, noteAtom, () => 'The scan is taking long; confirm again when it ends.')
-      return
-    }
+    return
   }
   await update($, pendingAtom, () => null)
   const [verb, noun] = LABEL[p.action]

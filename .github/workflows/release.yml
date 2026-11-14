@@ -1,0 +1,55 @@
+# Every push to main that changes the mod becomes a new version: the patch number goes up
+# (unless the push set the version itself), the version is tagged session-manager--v<version>
+# and a GitHub Release is published. Claude Code offers an update only when the version
+# changes, so this is what lets people's auto-update pick up each push.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # The bot's own version commit carries [skip ci] and must not release again.
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the helper script parses
+        run: node --check scripts/sessions.mjs
+
+      - name: Pick the version
+        id: ver
+        run: node .github/scripts/bump-version.mjs "${{ github.event.before }}"
+
+      - name: Commit the version, tag and release
+        if: ${{ steps.ver.outputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          BUMPED: ${{ steps.ver.outputs.bumped }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$BUMPED" = "true" ]; then
+            git commit -am "Release $VERSION [skip ci]"
+            git push origin HEAD:main
+          fi
+          git tag -a "$TAG" -m "Session Manager $VERSION"
+          git push origin "$TAG"
+          gh release create "$TAG" --title "Session Manager $VERSION" --generate-notes

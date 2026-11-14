@@ -60,6 +60,25 @@ Then start a new session and type `/sessions` to open the pane.
 - **View** on any session shows what is inside it.
 - Moved chats show in the sidebar after you restart the Claude app.
 
+## Updating
+
+Every change pushed to this repository is released as a new version automatically: a GitHub Action raises the version number, tags it and publishes a [Release](https://github.com/mothannakhzaleh/claude-session-manager/releases) with the changes.
+
+**Get updates without doing anything (recommended, once):** in Claude Code, type `/plugin`, open **Marketplaces**, select **claude-session-manager** and choose **Enable auto-update**. Marketplaces other than Anthropic's start with auto-update off, so this one step is needed. After that, Claude Code checks for new versions in the background after your first message in a session, and loads them the next time it starts (or right away with `/reload-plugins`).
+
+**Update by hand:**
+
+- In Claude Code: `/plugin marketplace update claude-session-manager`, then `/plugin` → **Installed** → **session-manager** → **Update now**.
+- From a terminal:
+
+  ```bash
+  claude plugin marketplace update claude-session-manager
+  ```
+
+  ```bash
+  claude plugin update session-manager@claude-session-manager
+  ```
+
 ## License
 
 MIT © 2026 mothannakh · [satisfy.live](https://satisfy.live/)

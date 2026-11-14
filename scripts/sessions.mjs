@@ -1040,10 +1040,12 @@ async function diag() {
   const lines = []
   const add = (...l) => lines.push(...l)
 
+  // plugin.json has no version: Claude Code names the installed copy's folder after the
+  // commit it came from, so that folder name is the version (a dev copy shows its own name).
   let version = 'unknown'
   try {
-    const here = path.dirname(fileURLToPath(import.meta.url))
-    version = JSON.parse(await fsp.readFile(path.join(here, '..', '.claude-plugin', 'plugin.json'), 'utf8')).version ?? version
+    const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+    version = JSON.parse(await fsp.readFile(path.join(root, '.claude-plugin', 'plugin.json'), 'utf8')).version ?? path.basename(root)
   } catch {}
 
   add('### Session Manager diagnostics', '')

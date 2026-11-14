@@ -47,7 +47,7 @@ body:
     id: version
     attributes:
       label: Session Manager version
-      description: "From `claude plugin list` (for example 0.3.1)"
+      description: "From the Diagnostics report or `claude plugin list` (a release number such as 0.4.1, or a commit such as 4f2c9e1)"
     validations:
       required: true
   - type: dropdown

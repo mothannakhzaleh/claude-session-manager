@@ -1,7 +1,8 @@
-# Every push to main that changes the mod becomes a new version: the patch number goes up
-# (unless the push set the version itself), the version is tagged session-manager--v<version>
-# and a GitHub Release is published. Claude Code offers an update only when the version
-# changes, so this is what lets people's auto-update pick up each push.
+# Every push to main that changes the mod is tagged session-manager--v<x.y.z> and published
+# as a GitHub Release with its changes. Nothing is committed to main: plugin.json has no
+# version, so Claude Code takes the commit as the version and people's auto-update picks up
+# each merge by itself. The release number only names the tag and the Release
+# (patch + 1, or "Release-As: x.y.z" in the merged commit's message).
 name: Release
 
 on:
@@ -26,8 +27,6 @@ jobs:
   # The same checks as every pull request, on Linux, macOS and Windows: nothing is released
   # unless they all pass.
   check:
-    # The bot's own version commit carries [skip ci] and must not release again.
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     uses: ./.github/workflows/check.yml
 
   release:
@@ -38,24 +37,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Pick the version
+      - name: Pick the release number
         id: ver
-        run: node .github/scripts/bump-version.mjs "${{ github.event.before }}"
+        run: node .github/scripts/release-version.mjs
 
-      - name: Commit the version, tag and release
+      - name: Tag and release
         if: ${{ steps.ver.outputs.tag != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.ver.outputs.version }}
           TAG: ${{ steps.ver.outputs.tag }}
-          BUMPED: ${{ steps.ver.outputs.bumped }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ "$BUMPED" = "true" ]; then
-            git commit -am "Release $VERSION [skip ci]"
-            git push origin HEAD:main
-          fi
           git tag -a "$TAG" -m "Session Manager $VERSION"
           git push origin "$TAG"
           gh release create "$TAG" --title "Session Manager $VERSION" --generate-notes

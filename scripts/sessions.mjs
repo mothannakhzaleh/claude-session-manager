@@ -339,7 +339,23 @@ async function scan() {
         const side = path.join(pdir, id)
         const subFiles = (await files(path.join(side, 'subagents'))).filter(n => n.endsWith('.jsonl'))
         const key = `${file}|${st.size}|${st.mtimeMs}|${subFiles.length}`
+        // A transcript Claude is still writing is never opened: on some systems a read of it
+        // blocks until that process lets go, and a blocked read cannot be cancelled. Its numbers
+        // come from the last scan that read it, and are read again once it is closed.
+        const isLive = exclude.has(id) || running.has(id) || Date.now() - st.mtimeMs < LIVE_MS
+        let cacheKey = key
         let info = cache[key]
+        let isUnread = false
+        if (!info && isLive) {
+          const prev = Object.keys(cache).filter(k => k.startsWith(`${file}|`)).pop()
+          if (prev) {
+            cacheKey = prev
+            info = cache[prev]
+          } else {
+            isUnread = true
+            info = { rows: 0, badRows: 0, cwd: undefined, title: undefined, firstPrompt: undefined, first: undefined, last: undefined, uploads: { count: 0, bytes: 0 }, msgs: [] }
+          }
+        }
         if (!info) {
           info = await readTranscript(file, id)
           for (const sub of subFiles) {
@@ -350,17 +366,16 @@ async function scan() {
           }
           parsed++
         }
-        nextCache[key] = info
+        if (!isUnread) nextCache[cacheKey] = info
         const linked = index.get(id)
         const sideBytes = await sizeOf(side)
         const fileHistory = await sizeOf(path.join(prof.claude, 'file-history', id))
         const sessionEnv = await sizeOf(path.join(prof.claude, 'session-env', id))
-        const isLive = exclude.has(id) || running.has(id) || Date.now() - st.mtimeMs < LIVE_MS
         const state = linked?.state ?? 'cli-only'
         // A transcript with no real model reply is a leftover log (a summary or side run), not a conversation.
         const replies = info.msgs.reduce((n, m) => n + (m[6] === '<synthetic>' ? 0 : 1), 0)
         sessions.push({
-          kind: replies === 0 && !linked ? 'log' : 'chat',
+          kind: replies === 0 && !linked && !isUnread ? 'log' : 'chat',
           replies,
           id,
           user: prof.user,
@@ -370,6 +385,7 @@ async function scan() {
           account: linked?.account,
           state,
           isLive,
+          ...(isUnread || cacheKey !== key ? { isStale: true } : {}),
           isCurrent: exclude.has(id),
           // Sessions the app still lists are deleted there first, so its sidebar never points at nothing.
           canDelete: !isLive && state !== 'in-app',
@@ -1014,6 +1030,8 @@ async function restore(ids) {
 async function peek(id) {
   const t = await targetsOf(id)
   if (!t || t.isMissing) fail('session not found')
+  // Same rule as scan: a transcript Claude is still writing is not opened.
+  if (exclude.has(id) || t.isRunning || Date.now() - t.st.mtimeMs < LIVE_MS) fail('this chat is open in Claude or was used in the last 15 minutes; View works once it has been closed for 15 minutes')
   const prompts = []
   const replies = []
   const tools = {}

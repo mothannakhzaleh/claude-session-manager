@@ -36,7 +36,7 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
 ## Safe by design
 
 - Skills, plugins, mods, memory, agents, commands, hooks and settings are never touched: the helper only accepts session files by their exact shape and refuses anything inside those folders.
-- The session you are using, sessions open in a running Claude process, and sessions written in the last 15 minutes are skipped.
+- The session you are using, sessions open in a running Claude process, and sessions written in the last 15 minutes are skipped. Their transcripts are not even opened: their numbers come from the last scan that read them and update once they have been closed for 15 minutes.
 - Conversations still in the app's list are not deleted here. Delete them in the app first; their leftover files can then be cleared here.
 - Deleted and replaced files go to the **Recycle Bin** (Windows) or the **Trash** (macOS, Linux), so you can restore them.
 - Every delete, clear, move, restore and account removal asks you first.

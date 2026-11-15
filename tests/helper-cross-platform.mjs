@@ -116,11 +116,22 @@ test('scan lists every session with its state, tokens and uploads', () => {
   assert.equal(by[S_APP].state, 'archived')
   assert.equal(by[S_DELETED].state, 'deleted-in-app')
   assert.equal(by[S_DELETED].canRestore, true)
+  // A transcript written in the last 15 minutes is never opened (a read of a file Claude is
+  // still writing can block): listed as a chat, its numbers left for a later scan.
   assert.equal(by[S_LIVE].isLive, true)
-  assert.equal(r.total.input, 500)
-  assert.equal(r.total.output, 100)
+  assert.equal(by[S_LIVE].isStale, true)
+  assert.equal(by[S_LIVE].kind, 'chat')
+  assert.equal(by[S_LIVE].tokens.input, 0)
+  assert.equal(r.total.input, 400)
+  assert.equal(r.total.output, 80)
   const active = r.accounts.find(a => a.isAppActive)
   assert.equal(active?.accountUuid, ACCOUNT_NEW)
+})
+
+test('peek does not open a chat Claude is still writing', () => {
+  const r = run('peek', '--ids', S_LIVE)
+  assert.equal(r.ok, false)
+  assert.match(r.error, /15 minutes/)
 })
 
 test('peek shows what is inside a chat', () => {

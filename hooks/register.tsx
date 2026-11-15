@@ -176,7 +176,7 @@ async function helper($: EngineInterface, argv: string[]) {
   const script = `${$.plugin.root}/scripts/sessions.mjs`
   const current = await $.session.id().catch(() => '')
   const node = await needNode($)
-  const r = await $.process.run([node, script, ...argv, ...(current ? ['--exclude', current] : [])], { timeoutMs: 600_000 })
+  const r = await $.process.run([node, script, ...argv, ...(current ? ['--exclude', current] : [])], { timeoutMs: 300_000 })
   let body: { ok?: boolean; error?: string } & Record<string, unknown>
   try {
     body = JSON.parse(r.stdout)
@@ -391,6 +391,11 @@ async function openPane($: EngineInterface): Promise<string> {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
+    // This runs again on every load and reload of the mod. A scan or cleanup a previous copy
+    // started died with it, so its "busy" marks would block every scan and queued action.
+    await update($, busyAtom, () => '')
+    await update($, workAtom, () => null)
+    await update($, pendingAtom, p => (p?.isQueued ? { ...p, isQueued: false } : p))
     // Each registration stands alone: one the engine refuses (a /sessions taken by a skill of
     // the same name, say) must not stop the tool, the widget or the rest of this hook.
     await $.tool
@@ -950,6 +955,7 @@ export const register: Register = on => {
                 <Text wrap="truncate-end">
                   <Text color={st.color}>{`● ${st.label}`}</Text>
                   {s.isCurrent ? <Text color="suggestion"> · this session</Text> : s.isLive ? <Text color="warning"> · in use</Text> : null}
+                  {s.isStale ? <Text dimColor> · numbers update after it closes</Text> : null}
                   <Text dimColor>
                     {` · ${mb(s.bytes.total)} · ${num(s.replies)} replies · out ${num(s.tokens.output)} · cache read ${num(s.tokens.cacheRead)}`}
                     {s.uploads.count ? ` · ${s.uploads.count} uploads (${mb(s.uploads.bytes)})` : ''}

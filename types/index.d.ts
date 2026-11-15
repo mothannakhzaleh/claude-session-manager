@@ -11,6 +11,7 @@ export type SessionRow = {
   account?: string
   state: 'in-app' | 'archived' | 'deleted-in-app' | 'cli-only'
   isLive: boolean
+  isStale?: boolean // open in Claude: its numbers are from the last time it was read (none yet when first seen)
   isCurrent: boolean
   canDelete: boolean
   canStrip: boolean

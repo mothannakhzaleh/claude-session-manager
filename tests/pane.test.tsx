@@ -159,9 +159,9 @@ test('the pane lists sessions and asks before deleting, on every surface', async
     await ui.press({ key: 'diag-close' })
     expect(await ui.find({ key: 'diag-copy' })).toBeUndefined()
 
-    expect((await ui.find({ key: 'widget-toggle' }))?.text).toBe('Widget at start: on')
-    await ui.press({ key: 'widget-toggle' })
     expect((await ui.find({ key: 'widget-toggle' }))?.text).toBe('Widget at start: off')
+    await ui.press({ key: 'widget-toggle' })
+    expect((await ui.find({ key: 'widget-toggle' }))?.text).toBe('Widget at start: on')
     await ui.press({ key: 'widget-toggle' })
     await ui.unmount()
   }
@@ -194,7 +194,8 @@ test('the desktop app gets the widget when it attaches after the start', async (
   on('command.register', () => ({ value: { command: 'sessions' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('session.attach', (_, e) => ({ clientId: e.clientId }))
-  on('store.get', () => ({ value: SCAN }))
+  // The person turned the widget on earlier.
+  on('store.get', (_, e) => ({ value: e.key === 'showWidget' ? true : SCAN }))
   const opens: string[] = []
   on('ui.open', (_, e) => {
     opens.push(e.id)
@@ -208,6 +209,39 @@ test('the desktop app gets the widget when it attaches after the start', async (
   // Joining again (a reload of the app window) does not reopen a widget the person closed.
   await $.session.attach({ surface: 'desktop', clientId: 'desktop:second' })
   expect(opens).toEqual(['session-manager'])
+})
+
+test('the widget is off until /widget turns it on, and /widget hides it again', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'x' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }))
+  const stored = new Map<string, unknown>()
+  on('store.get', (_, e) => ({ value: e.key === 'showWidget' ? stored.get(e.key) : SCAN }))
+  on('store.set', (_, e) => {
+    stored.set(e.key, e.value)
+    return { value: undefined }
+  })
+  const opens: string[] = []
+  const closes: string[] = []
+  on('ui.open', (_, e) => {
+    opens.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', (_, e) => {
+    closes.push(e.id)
+    return { value: undefined }
+  })
+  await $.session.start({ cwd: '/', surface: null, isInteractive: true })
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(opens).toEqual([]) // a new install shows no widget
+  const shown = await $.command.run({ command: 'widget' })
+  expect(JSON.stringify(shown)).toContain('Sessions widget shown')
+  expect(opens).toEqual(['session-manager'])
+  expect(stored.get('showWidget')).toBe(true)
+  const hidden = await $.command.run({ command: 'widget' })
+  expect(JSON.stringify(hidden)).toContain('Sessions widget hidden')
+  expect(closes).toEqual(['session-manager'])
+  expect(stored.get('showWidget')).toBe(false)
 })
 
 test('without Node.js the pane offers to install it', async ($, on) => {

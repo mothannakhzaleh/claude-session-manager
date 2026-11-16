@@ -110,7 +110,7 @@ declare module 'claude-code' {
       cardPage: number
       peek: Shaped<Peek | null>
       node: NodeState
-      widget: boolean // open the small Sessions widget when a desktop session starts
+      widget: boolean // open the small Sessions widget when a desktop session starts (off unless turned on)
       widgetOpened: boolean // the widget was opened once this session (closing it keeps it closed)
       diag: Shaped<Diag | null>
     }

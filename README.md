@@ -24,7 +24,7 @@ See every Claude Code session on your computer (Windows, macOS or Linux), for ev
 - **Bring chats from another account.** Moves a chat's sidebar entry into the account the Claude app uses now, so you can continue it there. It lands in your Active list. The conversation itself stays where it is, so nothing is duplicated or left behind.
 - **Restore deleted chats to the sidebar.** A chat you deleted in the app often still has its conversation on disk ("Deleted in app, files left"). **Restore to sidebar** gives it a new entry in your Active list so you can continue it. The conversation is not changed.
 - **Remove empty accounts.** Every account you ever signed in to in the Claude app keeps a small folder in the app's data, even after you sign out. When an account has no chats left, **Remove N empty account(s)** in the pane footer sends its folder to the Recycle Bin or Trash. The account the app uses now, and any account with chats left, are never touched.
-- **Small widget.** In the Claude desktop app a small Sessions widget opens beside the chat with the main numbers. Turn it off from the pane footer.
+- **Small widget, when you want it.** In the Claude desktop app, type `/widget` to show a small Sessions widget beside the chat with the main numbers, and `/widget` again to hide it. It is off until you turn it on, and your choice is remembered for new sessions (also switchable with **Widget at start** in the pane footer).
 - **Diagnostics.** The **Diagnostics** button in the pane footer shows a short report (versions, where removed files go, which Claude folders exist and how many sessions each holds) with a **Copy report** button for bug reports. It holds no emails, account ids, user names or chat titles.
 
 ![Cleanup: the Uploads card with its own Clear all button, and the progress bar while it runs](docs/images/cleanup.png)
@@ -54,7 +54,7 @@ When Claude opens the pane for you (the `manage-sessions` skill and its `open_se
 - The Claude desktop app's sidebar index (`claude-code-sessions` in the app's data folder), to show which chats are in the app, to move or restore them, and to remove the folder of an account with no chats left.
 - Nothing else: no login or account data, and no files outside the folders above.
 
-**Hooks it adds:** `session.start` (registers `/sessions` and the `open_sessions` tool, and opens the widget on the desktop app), `command.run` for `/sessions`, `ui.render` for the pane, and `tool.call` for its own tool `mcp__session-manager__open_sessions` only. That `tool.call` hook answers calls to this one tool (it opens the pane and returns the summary above); it never sees, changes or blocks calls to any other tool.
+**Hooks it adds:** `session.start` (registers `/sessions`, `/widget` and the `open_sessions` tool), `session.attach` (opens the widget when the desktop app joins, if you turned it on), `command.run` for `/sessions` and `/widget`, `ui.render` for the pane, and `tool.call` for its own tool `mcp__session-manager__open_sessions` only. That `tool.call` hook answers calls to this one tool (it opens the pane and returns the summary above); it never sees, changes or blocks calls to any other tool.
 
 **Programs it starts, and why:**
 
@@ -103,7 +103,7 @@ Then start a new session and type `/sessions` to open the pane.
 
 - `/sessions` opens the pane. The first scan reads every transcript once (about 20 seconds on a large history). After that, only changed files are read again.
 - In the Claude desktop app you can also pick it from **+ → Plugins → Session Manager**, or just ask Claude to "show my sessions": the plugin's `manage-sessions` skill opens the same pane. It never deletes anything itself; all cleanup stays in the pane and asks you first.
-- In the desktop app a small Sessions widget opens beside the chat when you start a new session (where your app version has widgets). Turn it off with **Widget at start** in the pane footer.
+- `/widget` shows or hides the small Sessions widget in the desktop app (where your app version has widgets; elsewhere it opens the pane). It is off until you turn it on, and new sessions follow your last choice.
 - Click a tile's **Clean up** or **Bring here** to open its card.
 - **View** on any session shows what is inside it.
 - Moved chats show in the sidebar after you restart the Claude app.

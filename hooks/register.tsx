@@ -30,7 +30,7 @@ const cardPageAtom = atom({ plugin: 'session-manager', key: 'cardPage' } as cons
 const peekAtom = atom({ plugin: 'session-manager', key: 'peek' } as const, null, { shape: 'peek-1' })
 const nodeAtom = atom({ plugin: 'session-manager', key: 'node' } as const, '' as NodeState)
 const widgetOpenedAtom = atom({ plugin: 'session-manager', key: 'widgetOpened' } as const, false)
-const widgetAtom = atom({ plugin: 'session-manager', key: 'widget' } as const, true)
+const widgetAtom = atom({ plugin: 'session-manager', key: 'widget' } as const, false)
 const diagAtom = atom({ plugin: 'session-manager', key: 'diag' } as const, null, { shape: 'diag-1' })
 const OPEN_TOOL = 'mcp__session-manager__open_sessions'
 const ISSUES_URL ='https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose'
@@ -398,6 +398,19 @@ async function openWidget($: EngineInterface) {
   if (!scan || Date.now() - Date.parse(scan.scannedAt) > 60 * 60_000) void runScan($)
 }
 
+// Turns the widget on (shown now, and in new sessions) or off (closed now, and not opened again).
+async function setWidget($: EngineInterface, on: boolean): Promise<string> {
+  await update($, widgetAtom, () => on)
+  await $.store.set(WIDGET_KEY, on).catch(() => undefined)
+  if (!on) {
+    await $.ui.close({ id: PANE }).catch(() => undefined)
+    return 'Sessions widget hidden. /widget shows it again; /sessions opens the full pane.'
+  }
+  await update($, widgetOpenedAtom, () => false)
+  await openWidget($)
+  return 'Sessions widget shown, and it opens in new sessions too. /widget hides it.'
+}
+
 // ---------- register ----------
 
 export const register: Register = on => {
@@ -421,13 +434,17 @@ export const register: Register = on => {
     await $.command
       .register({ name: 'sessions', description: 'Show every Claude session on this PC: tokens, uploads, cleanup' })
       .catch(() => undefined)
+    await $.command
+      .register({ name: 'widget', description: 'Show or hide the small Sessions widget (remembered for new sessions)' })
+      .catch(() => undefined)
     // Bring back the last scan so the pane has numbers before a new scan finishes.
     if (!(await read($, scanAtom))) {
       const kept = (await $.store.get(STORE_KEY).catch(() => undefined)) as ScanResult | undefined
       const isCurrentShape = kept?.ok && Array.isArray(kept.sessions) && kept.sessions.every(s => s.kind !== undefined)
       if (isCurrentShape) await update($, scanAtom, () => kept)
     }
-    const wants = (await $.store.get(WIDGET_KEY).catch(() => undefined)) !== false
+    // Off unless the person turned it on (/widget or the pane footer).
+    const wants = (await $.store.get(WIDGET_KEY).catch(() => undefined)) === true
     await update($, widgetAtom, () => wants)
     // A terminal session draws at start; the desktop app attaches after the start, so its
     // widget opens from session.attach below.
@@ -443,6 +460,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'sessions' }, async $ => ({ text: await openPane($) }))
+  on('command.run', { command: 'widget' }, async $ => ({ text: await setWidget($, !(await read($, widgetAtom))) }))
 
   // The tool the plugin's `sessions` skill calls (the skill is what lists Session Manager in
   // the desktop app's Plugins menu): it opens the pane, as /sessions does. Nothing is
@@ -1067,6 +1085,7 @@ export const register: Register = on => {
             plain
             dimColor
             onPress={async () => {
+              // Remembered for new sessions; the pane in front of the person stays open.
               const next = !(await read($, widgetAtom))
               await update($, widgetAtom, () => next)
               await $.store.set(WIDGET_KEY, next).catch(() => undefined)

@@ -29,6 +29,7 @@ const cardAtom = atom({ plugin: 'session-manager', key: 'card' } as const, '' as
 const cardPageAtom = atom({ plugin: 'session-manager', key: 'cardPage' } as const, 0)
 const peekAtom = atom({ plugin: 'session-manager', key: 'peek' } as const, null, { shape: 'peek-1' })
 const nodeAtom = atom({ plugin: 'session-manager', key: 'node' } as const, '' as NodeState)
+const widgetOpenedAtom = atom({ plugin: 'session-manager', key: 'widgetOpened' } as const, false)
 const widgetAtom = atom({ plugin: 'session-manager', key: 'widget' } as const, true)
 const diagAtom = atom({ plugin: 'session-manager', key: 'diag' } as const, null, { shape: 'diag-1' })
 const OPEN_TOOL = 'mcp__session-manager__open_sessions'
@@ -386,6 +387,17 @@ async function openPane($: EngineInterface): Promise<string> {
   return `${head}\n${summaryText(scan)}`
 }
 
+// The small Sessions widget beside the chat, on the desktop app only (other surfaces would
+// open the full pane unasked), once per session: closing it keeps it closed. The person turns
+// it off for every session from the pane footer.
+async function openWidget($: EngineInterface) {
+  if (!(await read($, widgetAtom)) || (await read($, widgetOpenedAtom))) return
+  await update($, widgetOpenedAtom, () => true)
+  await $.ui.open({ id: PANE, title: TITLE, placement: 'widget' }).catch(() => undefined)
+  const scan = await read($, scanAtom)
+  if (!scan || Date.now() - Date.parse(scan.scannedAt) > 60 * 60_000) void runScan($)
+}
+
 // ---------- register ----------
 
 export const register: Register = on => {
@@ -415,16 +427,19 @@ export const register: Register = on => {
       const isCurrentShape = kept?.ok && Array.isArray(kept.sessions) && kept.sessions.every(s => s.kind !== undefined)
       if (isCurrentShape) await update($, scanAtom, () => kept)
     }
-    // The small Sessions widget beside the chat, on the desktop app only (other surfaces
-    // would open the full pane unasked). The person turns it off from the pane.
     const wants = (await $.store.get(WIDGET_KEY).catch(() => undefined)) !== false
     await update($, widgetAtom, () => wants)
-    if (wants && e.surface === 'desktop') {
-      await $.ui.open({ id: PANE, title: TITLE, placement: 'widget' }).catch(() => undefined)
-      const scan = await read($, scanAtom)
-      if (!scan || Date.now() - Date.parse(scan.scannedAt) > 60 * 60_000) void runScan($)
-    }
+    // A terminal session draws at start; the desktop app attaches after the start, so its
+    // widget opens from session.attach below.
+    if (e.surface === 'desktop') await openWidget($)
     return started
+  })
+
+  // The desktop app joins the session after it started (session.start sees no surface then).
+  on('session.attach', { surface: 'desktop' }, async ($, e, next) => {
+    const joined = await next(e)
+    await openWidget($)
+    return joined
   })
 
   on('command.run', { command: 'sessions' }, async $ => ({ text: await openPane($) }))

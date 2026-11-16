@@ -190,6 +190,26 @@ test('a refused /sessions command does not stop the tool from registering', asyn
   expect(registered).toContain('open_sessions')
 })
 
+test('the desktop app gets the widget when it attaches after the start', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'sessions' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('session.attach', (_, e) => ({ clientId: e.clientId }))
+  on('store.get', () => ({ value: SCAN }))
+  const opens: string[] = []
+  on('ui.open', (_, e) => {
+    opens.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  // As in the desktop app: the session starts with no surface, then the app joins.
+  await $.session.start({ cwd: '/', surface: null, isInteractive: true })
+  expect(opens).toEqual([])
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:default' })
+  expect(opens).toEqual(['session-manager'])
+  // Joining again (a reload of the app window) does not reopen a widget the person closed.
+  await $.session.attach({ surface: 'desktop', clientId: 'desktop:second' })
+  expect(opens).toEqual(['session-manager'])
+})
+
 test('without Node.js the pane offers to install it', async ($, on) => {
   on('command.register', () => ({ value: { command: 'sessions' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))

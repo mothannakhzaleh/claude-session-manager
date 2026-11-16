@@ -244,6 +244,37 @@ test('the widget is off until /widget turns it on, and /widget hides it again', 
   expect(stored.get('showWidget')).toBe(false)
 })
 
+test('the toggle_widget tool behind the toggle-widget skill shows and hides the widget', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'x' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  const stored = new Map<string, unknown>()
+  on('store.get', (_, e) => ({ value: e.key === 'showWidget' ? stored.get(e.key) : SCAN }))
+  on('store.set', (_, e) => {
+    stored.set(e.key, e.value)
+    return { value: undefined }
+  })
+  const opens: string[] = []
+  const closes: string[] = []
+  on('ui.open', (_, e) => {
+    opens.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', (_, e) => {
+    closes.push(e.id)
+    return { value: undefined }
+  })
+  await $.session.start({ cwd: '/', surface: null, isInteractive: true })
+  const shown = await $.tool.call({ tool: 'mcp__session-manager__toggle_widget', show: true })
+  expect(JSON.stringify(shown)).toContain('Sessions widget shown')
+  expect(opens).toEqual(['session-manager'])
+  expect(stored.get('showWidget')).toBe(true)
+  // No input switches it: it was on, so it goes off.
+  const hidden = await $.tool.call({ tool: 'mcp__session-manager__toggle_widget' })
+  expect(JSON.stringify(hidden)).toContain('Sessions widget hidden')
+  expect(closes).toEqual(['session-manager'])
+  expect(stored.get('showWidget')).toBe(false)
+})
+
 test('without Node.js the pane offers to install it', async ($, on) => {
   on('command.register', () => ({ value: { command: 'sessions' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))

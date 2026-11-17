@@ -34,6 +34,7 @@ const widgetAtom = atom({ plugin: 'session-manager', key: 'widget' } as const, f
 const diagAtom = atom({ plugin: 'session-manager', key: 'diag' } as const, null, { shape: 'diag-1' })
 const OPEN_TOOL = 'mcp__session-manager__open_sessions'
 const WIDGET_TOOL = 'mcp__session-manager__toggle_widget'
+const UPDATE_TOOL = 'mcp__session-manager__set_auto_update'
 const ISSUES_URL ='https://github.com/mothannakhzaleh/claude-session-manager/issues/new/choose'
 const WIDGET_KEY = 'showWidget'
 const CARD_ROWS = 8
@@ -412,6 +413,16 @@ async function setWidget($: EngineInterface, shown: boolean): Promise<string> {
   return 'Sessions widget shown, and it opens in new sessions too. /widget hides it.'
 }
 
+// Turns this marketplace's auto-update on or off, as /plugin → Marketplaces → Enable auto-update
+// does (the desktop app has no such switch). The helper writes the one field.
+async function setAutoUpdate($: EngineInterface, on: boolean): Promise<string> {
+  const body = await helper($, ['auto-update', on ? 'on' : 'off'])
+  const extra = body.settingsMatched ? ' Your settings file named it too, so it was set to match.' : ''
+  return on
+    ? `Auto-update is on for Session Manager: Claude Code fetches new versions in the background and loads them in your next session.${extra}`
+    : `Auto-update is off for Session Manager. Update by hand with /plugin, or turn it on again with /auto-update.${extra}`
+}
+
 // ---------- register ----------
 
 export const register: Register = on => {
@@ -437,6 +448,17 @@ export const register: Register = on => {
       .catch(() => undefined)
     await $.command
       .register({ name: 'widget', description: 'Show or hide the small Sessions widget (remembered for new sessions)' })
+      .catch(() => undefined)
+    await $.command
+      .register({ name: 'auto-update', description: 'Turn Session Manager auto-update on (or "off")', argumentHint: 'on | off' })
+      .catch(() => undefined)
+    await $.tool
+      .register({
+        name: 'set_auto_update',
+        description:
+          'Turns automatic updates of the Session Manager plugin on or off, the same switch as /plugin → Marketplaces → claude-session-manager → Enable auto-update (which the desktop app does not show). Changes only that one setting.',
+        inputSchema: { type: 'object', properties: { on: { type: 'boolean', description: 'true to turn auto-update on (the default), false to turn it off' } } },
+      })
       .catch(() => undefined)
     await $.tool
       .register({
@@ -470,6 +492,18 @@ export const register: Register = on => {
 
   on('command.run', { command: 'sessions' }, async $ => ({ text: await openPane($) }))
   on('command.run', { command: 'widget' }, async $ => ({ text: await setWidget($, !(await read($, widgetAtom))) }))
+  on('command.run', { command: 'auto-update' }, async ($, e) => {
+    const off = /^\s*off\b/i.test(e.args)
+    return setAutoUpdate($, !off)
+      .then(text => ({ text }))
+      .catch(err => ({ text: `Could not change auto-update: ${errText(err)}. Use /plugin → Marketplaces in the terminal instead.` }))
+  })
+  on('tool.call', { tool: UPDATE_TOOL }, async ($, e) => {
+    const wanted = (e.input as { on?: unknown } | undefined)?.on !== false
+    return setAutoUpdate($, wanted)
+      .then(text => ({ result: text }))
+      .catch(err => ({ result: `Could not change auto-update: ${errText(err)}.` }))
+  })
   on('tool.call', { tool: WIDGET_TOOL }, async ($, e) => {
     const show = (e.input as { show?: unknown } | undefined)?.show
     const wanted = typeof show === 'boolean' ? show : !(await read($, widgetAtom))

@@ -7,6 +7,7 @@
 //   node sessions.mjs strip  --ids a,b [--exclude <id>] [--permanent]
 //   node sessions.mjs delete --ids a,b [--exclude <id>] [--permanent]
 //   node sessions.mjs forget --ids <account>,...   (an account's app folder, only when no chat is left in it)
+//   node sessions.mjs auto-update on|off   (this marketplace's auto-update, as /plugin → Marketplaces sets it)
 //   node sessions.mjs diag   (a report for bug reports: no emails, ids or user names)
 //   --users-root <dir>   folder holding user profiles (default: the folder above your home, such as
 //                        C:\Users, /Users or /home; tests use a fixture)
@@ -906,6 +907,51 @@ async function forget(ids) {
   out({ ok: true, recycled: !flag('permanent'), trash: TRASH_NAME, results })
 }
 
+// ---------- auto-update: the same switch as /plugin → Marketplaces → Enable auto-update ----------
+
+const MARKETPLACE = 'claude-session-manager'
+
+// Writes one JSON file through a temporary file and a rename, so it is never left half written.
+async function writeJson(file, data) {
+  const tmp = `${file}.sm-tmp`
+  await fsp.writeFile(tmp, JSON.stringify(data, null, 2))
+  await fsp.rename(tmp, file)
+}
+
+// Sets `autoUpdate` on this marketplace's entry in known_marketplaces.json, the field Claude
+// Code's own toggle writes; nothing else in the file changes. A user settings entry for this
+// marketplace that names `autoUpdate` itself wins over that file, so it is set to match (only
+// that one key); one that does not name it is left alone.
+async function autoUpdate(on) {
+  const root = opt('plugins-root') ?? process.env.CLAUDE_CODE_PLUGIN_CACHE_DIR ?? path.join(os.homedir(), '.claude', 'plugins')
+  const file = path.join(root, 'known_marketplaces.json')
+  let data
+  try {
+    data = JSON.parse(await fsp.readFile(file, 'utf8'))
+  } catch {
+    fail('Claude Code has no marketplace list on this computer yet (known_marketplaces.json)')
+  }
+  const entry = data?.[MARKETPLACE]
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) fail(`the ${MARKETPLACE} marketplace is not added in Claude Code`)
+  const was = entry.autoUpdate === true
+  if (entry.autoUpdate !== on) {
+    entry.autoUpdate = on
+    await writeJson(file, data)
+  }
+  let settingsMatched = false
+  const settingsFile = opt('settings') ?? path.join(os.homedir(), '.claude', 'settings.json')
+  try {
+    const settings = JSON.parse(await fsp.readFile(settingsFile, 'utf8'))
+    const declared = settings?.extraKnownMarketplaces?.[MARKETPLACE]
+    if (declared && typeof declared === 'object' && 'autoUpdate' in declared && declared.autoUpdate !== on) {
+      declared.autoUpdate = on
+      await writeJson(settingsFile, settings)
+      settingsMatched = true
+    }
+  } catch {} // no settings file, or one that is not plain JSON: left untouched
+  out({ ok: true, autoUpdate: on, was, settingsMatched })
+}
+
 // ---------- restore: give a chat the app deleted a sidebar entry again ----------
 
 // Settings taken from the target account's newest entry, so a restored chat opens like the
@@ -1216,8 +1262,12 @@ try {
   else if (cmd === 'peek') await peek(ids[0] ?? '')
   else if (cmd === 'restore') await restore(ids)
   else if (cmd === 'forget') await forget(ids)
+  else if (cmd === 'auto-update') {
+    if (args[1] !== 'on' && args[1] !== 'off') fail('auto-update needs on or off')
+    await autoUpdate(args[1] === 'on')
+  }
   else if (cmd === 'diag') await diag()
-  else fail('usage: sessions.mjs scan|strip|delete|move|restore|forget|peek|diag [--ids a,b] [--to account] [--exclude id] [--permanent]')
+  else fail('usage: sessions.mjs scan|strip|delete|move|restore|forget|auto-update|peek|diag [--ids a,b] [--to account] [--exclude id] [--permanent]')
 } catch (err) {
   fail(String(err?.stack ?? err))
 }

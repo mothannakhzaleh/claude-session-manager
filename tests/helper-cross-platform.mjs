@@ -53,7 +53,7 @@ function writeSession(id, opts = {}, ageMs = 2 * DAY) {
 }
 
 function run(cmd, ...extra) {
-  const r = spawnSync(process.execPath, [HELPER, cmd, '--users-root', usersRoot, '--cache', path.join(tmp, 'cache.json'), ...extra], {
+  const r = spawnSync(process.execPath, [HELPER, ...cmd.split(' '), '--users-root', usersRoot, '--cache', path.join(tmp, 'cache.json'), ...extra], {
     encoding: 'utf8',
     env: { ...process.env, XDG_DATA_HOME: xdg },
   })
@@ -235,4 +235,40 @@ test('forget refuses an account that still has a chat in the sidebar', () => {
   assert.equal(r.results[0].ok, false)
   assert.match(r.results[0].reason, /still has chats/)
   assert.ok(fs.existsSync(folder))
+})
+
+test('auto-update sets only this marketplace autoUpdate, as the /plugin toggle does', () => {
+  const plugins = path.join(tmp, 'plugins')
+  fs.mkdirSync(plugins, { recursive: true })
+  const list = path.join(plugins, 'known_marketplaces.json')
+  const other = { source: { source: 'github', repo: 'someone/else' }, installLocation: '/x', lastUpdated: '2026-01-01T00:00:00.000Z' }
+  fs.writeFileSync(list, JSON.stringify({ 'claude-session-manager': { source: { source: 'github', repo: 'owner/repo' }, lastUpdated: '2026-01-01T00:00:00.000Z' }, other }))
+  const settings = path.join(tmp, 'settings.json')
+  fs.writeFileSync(settings, JSON.stringify({ theme: 'dark', extraKnownMarketplaces: { 'claude-session-manager': { source: { source: 'github', repo: 'owner/repo' } } } }))
+  const on = run('auto-update on', '--plugins-root', plugins, '--settings', settings)
+  assert.equal(on.ok, true, on.error)
+  const after = JSON.parse(fs.readFileSync(list, 'utf8'))
+  assert.equal(after['claude-session-manager'].autoUpdate, true)
+  assert.equal(after['claude-session-manager'].lastUpdated, '2026-01-01T00:00:00.000Z')
+  assert.deepEqual(after.other, other)
+  // A settings entry that does not name autoUpdate is left as it was.
+  assert.equal(on.settingsMatched, false)
+  assert.equal('autoUpdate' in JSON.parse(fs.readFileSync(settings, 'utf8')).extraKnownMarketplaces['claude-session-manager'], false)
+  // One that names it is set to match, since it wins over the list.
+  fs.writeFileSync(settings, JSON.stringify({ theme: 'dark', extraKnownMarketplaces: { 'claude-session-manager': { source: { source: 'github', repo: 'owner/repo' }, autoUpdate: true } } }))
+  const off = run('auto-update off', '--plugins-root', plugins, '--settings', settings)
+  assert.equal(off.ok, true, off.error)
+  assert.equal(JSON.parse(fs.readFileSync(list, 'utf8'))['claude-session-manager'].autoUpdate, false)
+  const s2 = JSON.parse(fs.readFileSync(settings, 'utf8'))
+  assert.equal(s2.extraKnownMarketplaces['claude-session-manager'].autoUpdate, false)
+  assert.equal(s2.theme, 'dark')
+})
+
+test('auto-update refuses when the marketplace is not added', () => {
+  const plugins = path.join(tmp, 'plugins-empty')
+  fs.mkdirSync(plugins, { recursive: true })
+  fs.writeFileSync(path.join(plugins, 'known_marketplaces.json'), JSON.stringify({}))
+  const r = run('auto-update on', '--plugins-root', plugins, '--settings', path.join(tmp, 'none.json'))
+  assert.equal(r.ok, false)
+  assert.match(r.error, /not added/)
 })

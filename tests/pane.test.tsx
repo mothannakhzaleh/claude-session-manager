@@ -275,6 +275,24 @@ test('the toggle_widget tool behind the toggle-widget skill shows and hides the 
   expect(stored.get('showWidget')).toBe(false)
 })
 
+test('/auto-update and the set_auto_update tool run the helper with on or off', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'x' } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('store.get', () => ({ value: SCAN }))
+  const calls: string[] = []
+  on('process.run', (_, e) => {
+    if (e.argv[1] === '--version') return { value: { exitCode: 0, stderr: '', isStdoutTruncated: false, isStderrTruncated: false, stdout: 'v22.11.0\n' } }
+    const i = e.argv.indexOf('auto-update')
+    calls.push(e.argv[i + 1])
+    return { value: { exitCode: 0, stderr: '', isStdoutTruncated: false, isStderrTruncated: false, stdout: JSON.stringify({ ok: true, autoUpdate: e.argv[i + 1] === 'on', settingsMatched: false }) } }
+  })
+  await $.session.start({ cwd: '/', surface: null, isInteractive: true })
+  expect(JSON.stringify(await $.command.run({ command: 'auto-update', args: '' }))).toContain('Auto-update is on')
+  expect(JSON.stringify(await $.command.run({ command: 'auto-update', args: 'off' }))).toContain('Auto-update is off')
+  expect(JSON.stringify(await $.tool.call({ tool: 'mcp__session-manager__set_auto_update', on: true }))).toContain('Auto-update is on')
+  expect(calls).toEqual(['on', 'off', 'on'])
+})
+
 test('without Node.js the pane offers to install it', async ($, on) => {
   on('command.register', () => ({ value: { command: 'sessions' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))

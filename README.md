@@ -52,15 +52,16 @@ When Claude opens the pane for you (the `manage-sessions` skill and its `open_se
 
 - Session transcripts and their side folders under `~/.claude` (`projects`, `file-history`, `session-env`). Conversation text is read to count tokens and uploads, to find titles, and for **View**, and is shown only on your screen.
 - The Claude desktop app's sidebar index (`claude-code-sessions` in the app's data folder), to show which chats are in the app, to move or restore them, and to remove the folder of an account with no chats left.
+- Only when you turn auto-update on or off: Claude Code's marketplace list (`~/.claude/plugins/known_marketplaces.json`), where it sets `autoUpdate` on this plugin's marketplace and nothing else, and your `~/.claude/settings.json`, which it changes only if its entry for this marketplace already names `autoUpdate` (that value wins over the list, so it is set to match).
 - Nothing else: no login or account data, and no files outside the folders above.
 
-**Hooks it adds:** `session.start` (registers `/sessions`, `/widget` and the `open_sessions` and `toggle_widget` tools), `session.attach` (opens the widget when the desktop app joins, if you turned it on), `command.run` for `/sessions` and `/widget`, `ui.render` for the pane, and `tool.call` for its own two tools only: `mcp__session-manager__open_sessions` (opens the pane and returns the summary above) and `mcp__session-manager__toggle_widget` (shows or hides the widget). That hook never sees, changes or blocks calls to any other tool.
+**Hooks it adds:** `session.start` (registers `/sessions`, `/widget`, `/auto-update` and the `open_sessions`, `toggle_widget` and `set_auto_update` tools), `session.attach` (opens the widget when the desktop app joins, if you turned it on), `command.run` for `/sessions`, `/widget` and `/auto-update`, `ui.render` for the pane, and `tool.call` for its own three tools only: `mcp__session-manager__open_sessions` (opens the pane and returns the summary above), `mcp__session-manager__toggle_widget` (shows or hides the widget) and `mcp__session-manager__set_auto_update` (turns this plugin's auto-update on or off). That hook never sees, changes or blocks calls to any other tool.
 
 **Programs it starts, and why:**
 
 | Program and arguments (written out in full in [hooks/register.tsx](hooks/register.tsx) and [scripts/sessions.mjs](scripts/sessions.mjs)) | When | Why |
 | --- | --- | --- |
-| `node scripts/sessions.mjs scan`, `peek`, `strip`, `delete`, `move`, `restore`, `forget` (remove an empty account folder) or `diag` | Scanning, **View**, **Diagnostics** and each action you confirm | The helper that does the work, on local files only |
+| `node scripts/sessions.mjs scan`, `peek`, `strip`, `delete`, `move`, `restore`, `forget` (remove an empty account folder), `auto-update on` / `off` or `diag` | Scanning, **View**, **Diagnostics**, `/auto-update` and each action you confirm | The helper that does the work, on local files only |
 | `node --version`, then the same with `C:\Program Files\nodejs\node.exe`, `/opt/homebrew/bin/node`, `/usr/local/bin/node`, `/usr/bin/node` and `/home/linuxbrew/.linuxbrew/bin/node` | First use in a session | Finds Node.js 18 or newer |
 | `/bin/zsh -ilc "command -v node"` and `/bin/bash -ilc "command -v node"`, then `--version` on the path they print | Only when none of the places above has Node.js (on Windows these shells do not exist and fail to start) | Finds a Node.js installed with nvm, fnm or volta, which only your shell knows |
 | `winget --version`, then `brew --version` with `brew`, `/opt/homebrew/bin/brew`, `/usr/local/bin/brew` and `/home/linuxbrew/.linuxbrew/bin/brew` | When you press **Install Node.js** | Picks the installer this system has |
@@ -112,7 +113,12 @@ Then start a new session and type `/sessions` to open the pane.
 
 Every change merged into this repository is a new version for Claude Code, after its checks pass on Linux, macOS and Windows. Changes to the mod are also published as a numbered [Release](https://github.com/mothannakhzaleh/claude-session-manager/releases) listing what changed.
 
-**Get updates without doing anything (recommended, once):** in Claude Code, type `/plugin`, open **Marketplaces**, select **claude-session-manager** and choose **Enable auto-update**. Marketplaces other than Anthropic's start with auto-update off, so this one step is needed. After that, Claude Code checks for new versions in the background after your first message in a session, and loads them the next time it starts (or right away with `/reload-plugins`).
+**Get updates without doing anything (recommended, once):** marketplaces other than Anthropic's start with auto-update off, so turn it on once:
+
+- In the Claude desktop app (which has no auto-update switch of its own): type `/auto-update`, pick **+ → Plugins → Session Manager → auto-update**, or ask Claude to turn on auto-update for Session Manager. `/auto-update off` turns it off again.
+- In the terminal: `/auto-update` works there too, or type `/plugin`, open **Marketplaces**, select **claude-session-manager** and choose **Enable auto-update**.
+
+After that, Claude Code checks for new versions in the background after your first message in a session, and loads them the next time it starts (or right away with `/reload-plugins`).
 
 **Update by hand:**
 

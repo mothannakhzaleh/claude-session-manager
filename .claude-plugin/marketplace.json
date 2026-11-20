@@ -8,6 +8,9 @@
     {
       "name": "session-manager",
       "source": "./",
+      "author": { "name": "mothannakh", "url": "https://satisfy.live/" },
+      "homepage": "https://github.com/mothannakhzaleh/claude-session-manager",
+      "license": "MIT",
       "description": "See every Claude Code session on your computer by account, with token totals; clear uploads, delete old sessions and leftover logs, view what is inside a chat, move chats between accounts and restore deleted chats to the sidebar"
     }
   ]

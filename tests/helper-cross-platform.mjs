@@ -23,6 +23,7 @@ const S_APP = 'aaaaaaaa-0000-4000-8000-000000000002' // listed in the app (old a
 const S_DELETED = 'aaaaaaaa-0000-4000-8000-000000000003' // deleted in the app, transcript left
 const S_LIVE = 'aaaaaaaa-0000-4000-8000-000000000004' // written just now
 const S_GONE = 'aaaaaaaa-0000-4000-8000-000000000005' // will be deleted
+const S_NEWFMT = 'aaaaaaaa-0000-4000-8000-000000000006' // listed by a newer entry with no cliSessionId
 
 let tmp, usersRoot, home, claude, project, xdg
 
@@ -85,6 +86,7 @@ before(() => {
   writeSession(S_DELETED)
   writeSession(S_LIVE, {}, 0)
   writeSession(S_GONE)
+  writeSession(S_NEWFMT)
 
   // The app index: the old account lists S_APP and marks S_DELETED deleted; the new account
   // was written last, so it is the one the app uses now.
@@ -97,6 +99,8 @@ before(() => {
   fs.writeFileSync(path.join(oldFolder, `deleted_${S_DELETED}`), String(Date.now()))
   const old = new Date(Date.now() - 3 * DAY)
   for (const f of fs.readdirSync(oldFolder)) fs.utimesSync(path.join(oldFolder, f), old, old)
+  // Newer app versions drop cliSessionId once the chat's process ends and keep the transcript here.
+  fs.writeFileSync(path.join(newFolder, 'local_bbbbbbbb-0000-4000-8000-000000000008.json'), JSON.stringify({ sessionId: 'local_bbbbbbbb-0000-4000-8000-000000000008', title: 'Newer entry', isArchived: false, lastAssistantCliSessionId: S_NEWFMT, priorCliSessionIds: [S_NEWFMT] }))
   fs.writeFileSync(path.join(newFolder, 'local_bbbbbbbb-0000-4000-8000-000000000009.json'), JSON.stringify({ cliSessionId: 'bbbbbbbb-0000-4000-8000-000000000009', model: 'claude-test-1', title: 'Newest' }))
 })
 
@@ -110,20 +114,23 @@ test('scan lists every session with its state, tokens and uploads', () => {
   assert.equal(r.platform, process.platform)
   assert.equal(r.trash, process.platform === 'win32' ? 'Recycle Bin' : 'Trash')
   const by = Object.fromEntries(r.sessions.map(s => [s.id, s]))
-  assert.equal(r.sessions.length, 5)
+  assert.equal(r.sessions.length, 6)
   assert.equal(by[S_CLI].state, 'cli-only')
   assert.equal(by[S_CLI].uploads.count, 1)
   assert.equal(by[S_APP].state, 'archived')
   assert.equal(by[S_DELETED].state, 'deleted-in-app')
   assert.equal(by[S_DELETED].canRestore, true)
+  assert.equal(by[S_NEWFMT].state, 'in-app')
+  assert.equal(by[S_NEWFMT].account, ACCOUNT_NEW)
+  assert.equal(by[S_NEWFMT].canDelete, false)
   // A transcript written in the last 15 minutes is never opened (a read of a file Claude is
   // still writing can block): listed as a chat, its numbers left for a later scan.
   assert.equal(by[S_LIVE].isLive, true)
   assert.equal(by[S_LIVE].isStale, true)
   assert.equal(by[S_LIVE].kind, 'chat')
   assert.equal(by[S_LIVE].tokens.input, 0)
-  assert.equal(r.total.input, 400)
-  assert.equal(r.total.output, 80)
+  assert.equal(r.total.input, 500)
+  assert.equal(r.total.output, 100)
   const active = r.accounts.find(a => a.isAppActive)
   assert.equal(active?.accountUuid, ACCOUNT_NEW)
 })
@@ -170,6 +177,12 @@ test('delete sends a session to the bin and refuses a live one', () => {
     assert.match(info, /^\[Trash Info\]\nPath=\/.+\nDeletionDate=\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\n$/)
     assert.ok(fs.existsSync(path.join(xdg, 'Trash', 'files', `${S_GONE}.jsonl`)))
   }
+})
+
+test('delete refuses a chat a newer app entry still lists', () => {
+  const r = run('delete', '--ids', S_NEWFMT)
+  assert.equal(r.results[0].ok, false)
+  assert.ok(fs.existsSync(path.join(project, `${S_NEWFMT}.jsonl`)))
 })
 
 test('diagnostics describe the folders without ids or names', () => {

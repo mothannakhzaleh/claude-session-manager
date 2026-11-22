@@ -147,8 +147,17 @@ async function appRoots(home) {
   return found
 }
 
+// The transcripts one sidebar entry points at, its current one first. Older entries name it in
+// cliSessionId; newer ones leave that out once the chat's process has ended and keep it in
+// lastAssistantCliSessionId and priorCliSessionIds instead.
+function transcriptIds(o) {
+  const ids = [o?.cliSessionId, o?.lastAssistantCliSessionId]
+  if (Array.isArray(o?.priorCliSessionIds)) ids.push(...[...o.priorCliSessionIds].reverse())
+  return [...new Set(ids.filter(id => typeof id === 'string' && UUID.test(id)))]
+}
+
 // The desktop app's per-account session index: <app root>/claude-code-sessions/<account>/<org>.
-// Read only. local_<id>.json names the transcript (cliSessionId); deleted_<id> marks one the app deleted.
+// Read only. local_<id>.json names its transcripts (transcriptIds); deleted_<id> marks one the app deleted.
 async function desktopIndex(home) {
   const index = new Map()
   const accounts = new Map()
@@ -180,16 +189,22 @@ async function desktopIndex(home) {
           } else if (name.startsWith('local_') && name.endsWith('.json')) {
             try {
               const o = JSON.parse(await fsp.readFile(path.join(folder, name), 'utf8'))
-              const id = o.cliSessionId
-              if (!UUID.test(id ?? '')) continue
+              const ids = transcriptIds(o)
+              if (!ids.length) continue
               acc.indexed++
-              index.set(id, {
+              const entry = {
                 account,
                 org,
                 state: o.isArchived ? 'archived' : 'in-app',
                 appTitle: typeof o.title === 'string' ? o.title : undefined,
                 localFile: path.join(folder, name),
                 appId: name.slice(6, -5), // local_<appId>.json
+              }
+              ids.forEach((id, i) => {
+                // An entry's current transcript always wins; an earlier one never takes a
+                // transcript from another entry that lists it as its current one.
+                const had = index.get(id)
+                if (i === 0 || !had?.localFile || had.viaPrior) index.set(id, i === 0 ? entry : { ...entry, viaPrior: true })
               })
             } catch {}
           }
